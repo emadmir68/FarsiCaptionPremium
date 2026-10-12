@@ -28,16 +28,16 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: FarsiCaptionPremium-v2.2-custom-style-apk
+          name: FarsiCaptionPremium-v3.0-ultra-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish Premium v2.2 APK
+      - name: Publish Premium v3.0 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v2.2-custom-style.apk
-          if gh release view v2.2-custom-style >/dev/null 2>&1; then
-            gh release upload v2.2-custom-style FarsiCaptionPremium-v2.2-custom-style.apk --clobber
+          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.0-ultra.apk
+          if gh release view v3.0-ultra >/dev/null 2>&1; then
+            gh release upload v3.0-ultra FarsiCaptionPremium-v3.0-ultra.apk --clobber
           else
-            gh release create v2.2-custom-style FarsiCaptionPremium-v2.2-custom-style.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v2.2 Offline Premium" --notes "Offline Persian Auto Caption with editable font size, text color, caption background, Persian spacing normalization, no Backend URL and no App Token."
+            gh release create v3.0-ultra FarsiCaptionPremium-v3.0-ultra.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.0 Offline Premium" --notes "Deep Persian-first offline Auto Caption with self-learning corrections, Persian normalization, improved word timing, progressive word-by-word export, direct caption positioning, and premium style controls."
           fi
