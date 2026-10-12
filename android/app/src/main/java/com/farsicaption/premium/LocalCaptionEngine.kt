@@ -16,6 +16,8 @@ import kotlin.math.max
 
 class LocalCaptionEngine(private val context: Context) {
 
+    private val correctionStore = UserCorrectionStore(context)
+
     companion object {
         private const val MODEL_NAME = "ggml-small.bin"
         private const val MODEL_URL =
@@ -227,43 +229,24 @@ class LocalCaptionEngine(private val context: Context) {
     }
 
     private fun cleanSpeechText(raw: String): String {
-        var text = raw
-            .replace('ي', 'ی')
-            .replace('ك', 'ک')
-            .replace(Regex("\\[(music|موسیقی|silence|آهنگ)[^]]*]", RegexOption.IGNORE_CASE), " ")
-            .replace(Regex("\\((music|موسیقی|silence|آهنگ)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
-            .replace(Regex("\\s+"), " ")
+        val stripped = raw
+            .replace(Regex("\\[(music|موسیقی|silence|آهنگ|applause|تشویق)[^]]*]", RegexOption.IGNORE_CASE), " ")
+            .replace(Regex("\\((music|موسیقی|silence|آهنگ|applause|تشویق)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
             .trim()
 
-        val spacingFixes = listOf(
-            "هم کاران" to "همکاران",
-            "هم کار" to "همکار",
-            "هم کاری" to "همکاری",
-            "می شود" to "می‌شود",
-            "نمی شود" to "نمی‌شود",
-            "می کنم" to "می‌کنم",
-            "می کنیم" to "می‌کنیم",
-            "می کنید" to "می‌کنید",
-            "می کنند" to "می‌کنند",
-            "می خواهم" to "می‌خواهم",
-            "می خواهید" to "می‌خواهید",
-            "می تواند" to "می‌تواند",
-            "می توانند" to "می‌توانند",
-            "نمی توان" to "نمی‌توان",
-        )
-        spacingFixes.forEach { (wrong, right) ->
-            text = text.replace(wrong, right)
+        val text = PersianTextNormalizer.normalize(stripped, correctionStore.all())
+        val normalized = text.lowercase().replace("[", "").replace("]", "").trim()
+
+        if (normalized in setOf("music", "موسیقی", "آهنگ", "silence", "applause", "تشویق")) {
+            return ""
         }
-
-        val normalized = text.lowercase()
-        if (
-            normalized == "music" ||
-            normalized == "موسیقی" ||
-            normalized == "آهنگ" ||
-            normalized == "silence"
-        ) return ""
-
         return text
+    }
+
+    fun correctionCount(): Int = correctionStore.size()
+
+    fun learnCorrection(original: String, edited: String) {
+        correctionStore.learn(original, edited)
     }
 
     private fun buildAss(
