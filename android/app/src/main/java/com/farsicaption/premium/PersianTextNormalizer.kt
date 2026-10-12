@@ -1,5 +1,7 @@
 package com.farsicaption.premium
 
+import java.text.Normalizer
+
 object PersianTextNormalizer {
 
     private val fixedPhrases = linkedMapOf(
@@ -13,7 +15,6 @@ object PersianTextNormalizer {
         "به خاطر" to "به‌خاطر",
         "به صورت" to "به‌صورت",
         "به عنوان" to "به‌عنوان",
-        "در مورد" to "درمورد",
         "می باشد" to "می‌باشد",
         "می شود" to "می‌شود",
         "نمی شود" to "نمی‌شود",
@@ -63,14 +64,21 @@ object PersianTextNormalizer {
     ): String {
         if (raw.isBlank()) return raw
 
-        var text = raw
+        var text = Normalizer.normalize(raw, Normalizer.Form.NFC)
             .replace('ي', 'ی')
             .replace('ى', 'ی')
             .replace('ك', 'ک')
+            .replace('ة', 'ه')
             .replace('ۀ', 'ه')
+            .replace('ؤ', 'و')
+            .replace(Regex("""[آأإٱ]"""), "ا")
             .replace("ـ", "")
             .replace(Regex("""[\u064B-\u065F\u0670]"""), "")
+            .replace(Regex("""[\u200E\u200F\u202A-\u202E\u2066-\u2069]"""), "")
             .replace(Regex("""[\u00A0\u2000-\u200A\u202F\u205F\u3000]"""), " ")
+            .replace(',', '،')
+            .replace('?', '؟')
+            .replace(';', '؛')
             .replace(Regex("""\s+"""), " ")
             .trim()
 
