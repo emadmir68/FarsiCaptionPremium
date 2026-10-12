@@ -14,7 +14,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,33 +21,34 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -62,7 +62,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,7 +111,7 @@ class MainActivity : ComponentActivity() {
 private fun PremiumCaptionApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prefs = remember { context.getSharedPreferences("caption_settings", Context.MODE_PRIVATE) }
+    val engine = remember { LocalCaptionEngine(context) }
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var captions by remember { mutableStateOf<List<CaptionItem>>(emptyList()) }
@@ -122,13 +121,13 @@ private fun PremiumCaptionApp() {
 
     var isTranscribing by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("آماده") }
-
-    var serverUrl by remember {
-        mutableStateOf(prefs.getString("server", "http://10.0.2.2:8000") ?: "")
+    var modelProgress by remember { mutableIntStateOf(if (engine.isModelReady()) 100 else 0) }
+    var status by remember {
+        mutableStateOf(
+            if (engine.isModelReady()) "موتور فارسی آفلاین آماده است"
+            else "برای اولین استفاده، موتور فارسی یک‌بار دانلود می‌شود"
+        )
     }
-    var token by remember { mutableStateOf(prefs.getString("token", "") ?: "") }
-    var showSettings by remember { mutableStateOf(false) }
 
     var maxWords by remember { mutableFloatStateOf(5f) }
     var preset by remember { mutableStateOf("luxury") }
@@ -162,11 +161,11 @@ private fun PremiumCaptionApp() {
                 onSurface = TextPrimary,
             )
         ) {
-            Surface(modifier = Modifier.fillMaxSize(), color = Ink) {
+            Surface(Modifier.fillMaxSize(), color = Ink) {
                 if (sourceUri == null) {
                     HomeScreen(
+                        modelReady = engine.isModelReady(),
                         onPickVideo = { picker.launch(arrayOf("video/*")) },
-                        onSettings = { showSettings = true },
                     )
                 } else {
                     EditorScreen(
@@ -177,6 +176,7 @@ private fun PremiumCaptionApp() {
                         seekTarget = seekTarget,
                         isTranscribing = isTranscribing,
                         isExporting = isExporting,
+                        modelProgress = modelProgress,
                         status = status,
                         maxWords = maxWords,
                         preset = preset,
@@ -188,7 +188,6 @@ private fun PremiumCaptionApp() {
                             sourceUri = null
                             captions = emptyList()
                         },
-                        onSettings = { showSettings = true },
                         onNewVideo = { picker.launch(arrayOf("video/*")) },
                         onMaxWords = { maxWords = it },
                         onPreset = { preset = it },
@@ -205,63 +204,59 @@ private fun PremiumCaptionApp() {
                             }
                         },
                         onTranscribe = {
-                            val uri = sourceUri ?: return@EditorScreen
-                            if (serverUrl.isBlank()) {
-                                showSettings = true
-                                return@EditorScreen
-                            }
-                            prefs.edit().putString("server", serverUrl).putString("token", token).apply()
-                            isTranscribing = true
-                            status = "در حال شنیدن و زمان‌بندی گفتار فارسی…"
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        ApiClient(context).transcribe(
-                                            serverUrl = serverUrl,
-                                            appToken = token,
+                            val uri = sourceUri
+                            if (uri != null && !isTranscribing) {
+                                isTranscribing = true
+                                modelProgress = if (engine.isModelReady()) 100 else 0
+                                scope.launch {
+                                    runCatching {
+                                        engine.transcribe(
                                             uri = uri,
                                             maxWords = maxWords.roundToInt(),
+                                            onStatus = { status = it },
+                                            onModelProgress = { modelProgress = it },
                                         )
+                                    }.onSuccess { result ->
+                                        captions = result.captions
+                                        selectedIndex = 0
+                                        status = "زیرنویس آماده شد • ${result.captions.size} قطعه"
+                                    }.onFailure { e ->
+                                        status = e.message ?: "خطا در تشخیص گفتار"
                                     }
-                                }.onSuccess { result ->
-                                    captions = result.captions
-                                    selectedIndex = 0
-                                    status = "زیرنویس آماده شد • ${result.captions.size} قطعه"
-                                }.onFailure { e ->
-                                    status = e.message ?: "خطا در تشخیص گفتار"
+                                    isTranscribing = false
                                 }
-                                isTranscribing = false
                             }
                         },
                         onExport = {
-                            val uri = sourceUri ?: return@EditorScreen
-                            if (captions.isEmpty()) {
-                                Toast.makeText(context, "اول زیرنویس را بساز", Toast.LENGTH_SHORT).show()
-                                return@EditorScreen
-                            }
-                            isExporting = true
-                            status = "در حال رندر ویدیو با زیرنویس Premium…"
-                            scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        ApiClient(context).export(
-                                            serverUrl = serverUrl,
-                                            appToken = token,
+                            val uri = sourceUri
+                            if (uri != null && captions.isNotEmpty() && !isExporting) {
+                                isExporting = true
+                                scope.launch {
+                                    runCatching {
+                                        engine.export(
                                             uri = uri,
                                             captions = captions,
                                             preset = preset,
                                             fontSize = fontSize.roundToInt(),
                                             marginV = marginV.roundToInt(),
+                                            onStatus = { status = it },
                                         )
+                                    }.onSuccess { file ->
+                                        val saved = withContext(Dispatchers.IO) {
+                                            saveToGallery(context, file)
+                                        }
+                                        file.delete()
+                                        status = if (saved) {
+                                            "خروجی با موفقیت در گالری ذخیره شد"
+                                        } else {
+                                            "ویدیو ساخته شد اما ذخیره در گالری انجام نشد"
+                                        }
+                                        Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+                                    }.onFailure { e ->
+                                        status = e.message ?: "خطا در خروجی"
                                     }
-                                }.onSuccess { file ->
-                                    val saved = withContext(Dispatchers.IO) { saveToGallery(context, file) }
-                                    status = if (saved) "خروجی با موفقیت در گالری ذخیره شد" else "ویدیو ساخته شد اما ذخیره در گالری انجام نشد"
-                                    Toast.makeText(context, status, Toast.LENGTH_LONG).show()
-                                }.onFailure { e ->
-                                    status = e.message ?: "خطا در خروجی"
+                                    isExporting = false
                                 }
-                                isExporting = false
                             }
                         },
                     )
@@ -269,26 +264,12 @@ private fun PremiumCaptionApp() {
             }
         }
     }
-
-    if (showSettings) {
-        SettingsDialog(
-            serverUrl = serverUrl,
-            token = token,
-            onServerUrl = { serverUrl = it },
-            onToken = { token = it },
-            onDismiss = { showSettings = false },
-            onSave = {
-                prefs.edit().putString("server", serverUrl).putString("token", token).apply()
-                showSettings = false
-            },
-        )
-    }
 }
 
 @Composable
 private fun HomeScreen(
+    modelReady: Boolean,
     onPickVideo: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -302,12 +283,14 @@ private fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 22.dp, vertical = 26.dp)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 22.dp, vertical = 18.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(
@@ -316,7 +299,7 @@ private fun HomeScreen(
                     border = BorderStroke(1.dp, Gold.copy(alpha = 0.32f)),
                 ) {
                     Text(
-                        "FA CAPTION  AI",
+                        "FA CAPTION AI",
                         color = GoldSoft,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -324,17 +307,21 @@ private fun HomeScreen(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    "تنظیمات",
-                    color = TextMuted,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onSettings)
-                        .padding(10.dp),
-                )
+                Surface(
+                    color = if (modelReady) Mint.copy(alpha = 0.12f) else Gold.copy(alpha = 0.10f),
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text(
+                        if (modelReady) "OFFLINE READY" else "NO TOKEN",
+                        color = if (modelReady) Mint else GoldSoft,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                    )
+                }
             }
 
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(18.dp))
 
             Text(
                 "صدای تو،\nبا کپشن حرفه‌ای.",
@@ -344,7 +331,7 @@ private fun HomeScreen(
                 fontWeight = FontWeight.Black,
             )
             Text(
-                "Auto Caption مخصوص فارسی؛ با تشخیص گفتار دقیق، زمان‌بندی کلمه‌ای و ادیتور ساده و لوکس.",
+                "Auto Caption مخصوص فارسی؛ بدون App Token و بدون Backend. پردازش روی خود گوشی انجام می‌شود.",
                 color = TextMuted,
                 fontSize = 16.sp,
                 lineHeight = 26.sp,
@@ -353,14 +340,14 @@ private fun HomeScreen(
             PremiumImportCard(onPickVideo)
 
             Row(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FeaturePill("فارسی دقیق")
-                FeaturePill("کلمه‌به‌کلمه")
-                FeaturePill("بدون متن در سکوت")
+                FeaturePill("بدون توکن")
+                FeaturePill("آفلاین")
+                FeaturePill("فارسی")
                 FeaturePill("خروجی MP4")
             }
 
@@ -369,14 +356,11 @@ private fun HomeScreen(
                 shape = RoundedCornerShape(26.dp),
                 border = BorderStroke(1.dp, Stroke),
             ) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("Premium Engine", color = GoldSoft, fontWeight = FontWeight.Bold)
-                    EngineRow("01", "تشخیص فارسی Hybrid", "متن دقیق + زمان‌بندی سطح کلمه")
-                    EngineRow("02", "Smart Silence", "هنگام موسیقی و سکوت کپشن نمایش داده نمی‌شود")
-                    EngineRow("03", "Luxury Editor", "متن، قالب، اندازه و جای زیرنویس قابل تنظیم است")
+                    EngineRow("01", "Whisper Small فارسی", "مدل چندزبانه با اولویت دقت روی گوشی")
+                    EngineRow("02", "No Backend", "هیچ URL یا App Token لازم نیست")
+                    EngineRow("03", "Luxury Editor", "ویرایش متن، استایل، اندازه و جای کپشن")
                 }
             }
         }
@@ -392,12 +376,9 @@ private fun PremiumImportCard(onPickVideo: () -> Unit) {
         border = BorderStroke(1.dp, Gold.copy(alpha = 0.28f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(
-                modifier = Modifier
+                Modifier
                     .size(54.dp)
                     .clip(CircleShape)
                     .background(Gold),
@@ -450,6 +431,7 @@ private fun EditorScreen(
     seekTarget: Double?,
     isTranscribing: Boolean,
     isExporting: Boolean,
+    modelProgress: Int,
     status: String,
     maxWords: Float,
     preset: String,
@@ -458,7 +440,6 @@ private fun EditorScreen(
     onPosition: (Double) -> Unit,
     onSeekConsumed: () -> Unit,
     onBack: () -> Unit,
-    onSettings: () -> Unit,
     onNewVideo: () -> Unit,
     onMaxWords: (Float) -> Unit,
     onPreset: (String) -> Unit,
@@ -470,28 +451,44 @@ private fun EditorScreen(
     onExport: () -> Unit,
 ) {
     var tab by remember { mutableStateOf("text") }
-    val activeCaption = captions.lastOrNull { currentPosition >= it.start && currentPosition <= it.end }
+    val activeCaption = captions.lastOrNull { currentPosition in it.start..it.end }
     val displayText = activeCaption?.let { caption ->
         if (caption.words.isNotEmpty()) {
-            caption.words.filter { currentPosition >= it.start }.joinToString(" ") { it.text }.ifBlank { caption.text }
+            caption.words
+                .filter { currentPosition >= it.start }
+                .joinToString(" ") { it.text }
+                .ifBlank { caption.text }
         } else caption.text
     }.orEmpty()
 
     Scaffold(
         containerColor = Ink,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .background(Ink)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onBack) { Text("‹ پروژه‌ها", color = TextMuted) }
                 Spacer(Modifier.weight(1f))
                 Text("Farsi Caption", color = TextPrimary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onSettings) { Text("موتور", color = GoldSoft) }
+                Surface(
+                    color = Mint.copy(alpha = 0.10f),
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text(
+                        "OFFLINE",
+                        color = Mint,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
             }
         },
         bottomBar = {
@@ -499,7 +496,8 @@ private fun EditorScreen(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     OutlinedButton(
@@ -518,7 +516,7 @@ private fun EditorScreen(
                         modifier = Modifier.weight(0.62f),
                     ) {
                         if (isExporting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Ink)
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Ink)
                             Spacer(Modifier.width(8.dp))
                         }
                         Text("خروجی و ذخیره", fontWeight = FontWeight.Black)
@@ -548,11 +546,22 @@ private fun EditorScreen(
 
             if (isTranscribing) {
                 Column(Modifier.padding(horizontal = 16.dp)) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Gold,
-                        trackColor = Panel2,
-                    )
+                    if (modelProgress in 1..99) {
+                        LinearProgressIndicator(
+                            progress = { modelProgress / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Gold,
+                            trackColor = Panel2,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text("دانلود موتور فارسی: $modelProgress٪", color = GoldSoft, fontSize = 12.sp)
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Gold,
+                            trackColor = Panel2,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     Text(status, color = TextMuted, fontSize = 12.sp)
                 }
@@ -561,36 +570,18 @@ private fun EditorScreen(
             }
 
             if (captions.isEmpty()) {
-                AutoCaptionPanel(maxWords = maxWords, onMaxWords = onMaxWords, onTranscribe = onTranscribe)
+                AutoCaptionPanel(maxWords, onMaxWords, onTranscribe)
             } else {
-                TimelineStrip(
-                    captions = captions,
-                    selectedIndex = selectedIndex,
-                    currentPosition = currentPosition,
-                    onSelect = onSelectCaption,
-                )
-
-                EditorTabs(tab = tab, onTab = { tab = it })
+                TimelineStrip(captions, selectedIndex, currentPosition, onSelectCaption)
+                EditorTabs(tab) { tab = it }
 
                 when (tab) {
-                    "text" -> TextEditor(
-                        captions = captions,
-                        selectedIndex = selectedIndex,
-                        onSelect = onSelectCaption,
-                        onEdit = onEditCaption,
-                    )
-                    "style" -> StyleEditor(
-                        preset = preset,
-                        fontSize = fontSize,
-                        marginV = marginV,
-                        onPreset = onPreset,
-                        onFontSize = onFontSize,
-                        onMarginV = onMarginV,
-                    )
-                    else -> TimingPanel(captions = captions, selectedIndex = selectedIndex)
+                    "text" -> TextEditor(captions, selectedIndex, onSelectCaption, onEditCaption)
+                    "style" -> StyleEditor(preset, fontSize, marginV, onPreset, onFontSize, onMarginV)
+                    else -> TimingPanel(captions, selectedIndex)
                 }
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(22.dp))
         }
     }
 }
@@ -634,7 +625,7 @@ private fun VideoStage(
     }
 
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxWidth()
             .background(Color.Black)
             .aspectRatio(9f / 14f),
@@ -694,25 +685,20 @@ private fun AutoCaptionPanel(
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Auto Caption فارسی", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
             Text(
-                "هوش مصنوعی گفتار را تشخیص می‌دهد، سکوت را جدا می‌کند و هر کلمه را روی زمان خودش می‌نشاند.",
+                "بدون Backend و بدون App Token. بار اول موتور فارسی روی گوشی دانلود می‌شود و بعد پردازش محلی انجام می‌شود.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
             )
             Text("کلمات در هر کپشن: ${maxWords.roundToInt()}", color = TextPrimary, fontSize = 13.sp)
-            Slider(
-                value = maxWords,
-                onValueChange = onMaxWords,
-                valueRange = 2f..7f,
-                steps = 4,
-            )
+            Slider(value = maxWords, onValueChange = onMaxWords, valueRange = 2f..7f, steps = 4)
             Button(
                 onClick = onTranscribe,
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
                 shape = RoundedCornerShape(17.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("ساخت زیرنویس هوشمند", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
+                Text("ساخت زیرنویس فارسی", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
             }
         }
     }
@@ -731,10 +717,7 @@ private fun TimelineStrip(
             Spacer(Modifier.weight(1f))
             Text(formatTime(currentPosition), color = GoldSoft, fontSize = 12.sp)
         }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             item { Spacer(Modifier.width(8.dp)) }
             itemsIndexed(captions) { index, caption ->
                 val active = index == selectedIndex || currentPosition in caption.start..caption.end
@@ -747,19 +730,9 @@ private fun TimelineStrip(
                         .clickable { onSelect(index) },
                 ) {
                     Column(Modifier.padding(10.dp)) {
-                        Text(
-                            caption.text,
-                            color = TextPrimary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = 12.sp,
-                        )
+                        Text(caption.text, color = TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                         Spacer(Modifier.height(5.dp))
-                        Text(
-                            "${formatTime(caption.start)} — ${formatTime(caption.end)}",
-                            color = TextMuted,
-                            fontSize = 10.sp,
-                        )
+                        Text("${formatTime(caption.start)} — ${formatTime(caption.end)}", color = TextMuted, fontSize = 10.sp)
                     }
                 }
             }
@@ -771,7 +744,7 @@ private fun TimelineStrip(
 @Composable
 private fun EditorTabs(tab: String, onTab: (String) -> Unit) {
     Row(
-        modifier = Modifier
+        Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
@@ -793,7 +766,7 @@ private fun TabButton(
 ) {
     val active = selected == key
     Box(
-        modifier = modifier
+        modifier
             .padding(4.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(if (active) Panel2 else Color.Transparent)
@@ -823,7 +796,7 @@ private fun TextEditor(
                     .fillMaxWidth()
                     .clickable { onSelect(index) },
                 label = { Text(formatTime(caption.start)) },
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary,
                     focusedBorderColor = Gold,
@@ -903,7 +876,7 @@ private fun TimingPanel(captions: List<CaptionItem>, selectedIndex: Int) {
                 Text("کلمات زمان‌بندی‌شده: ${caption.words.size}", color = GoldSoft)
             }
             Text(
-                "در نسخه Premium زمان هر کلمه جداگانه نگه‌داری می‌شود تا متن جلوتر از صدای گوینده ظاهر نشود.",
+                "نسخه آفلاین زمان قطعه گفتار را از Whisper می‌گیرد و کلمات را داخل همان بازه همگام می‌کند.",
                 color = TextMuted,
                 fontSize = 12.sp,
                 lineHeight = 19.sp,
@@ -912,54 +885,9 @@ private fun TimingPanel(captions: List<CaptionItem>, selectedIndex: Int) {
     }
 }
 
-@Composable
-private fun SettingsDialog(
-    serverUrl: String,
-    token: String,
-    onServerUrl: (String) -> Unit,
-    onToken: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onSave: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Panel,
-        titleContentColor = TextPrimary,
-        textContentColor = TextMuted,
-        title = { Text("موتور Premium", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("آدرس Backend را وارد کن. کلید OpenAI داخل اپ ذخیره نمی‌شود.", fontSize = 12.sp)
-                OutlinedTextField(
-                    value = serverUrl,
-                    onValueChange = onServerUrl,
-                    label = { Text("Backend URL") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = onToken,
-                    label = { Text("App Token") },
-                    singleLine = true,
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = onSave, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) {
-                Text("ذخیره")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("بستن", color = TextMuted) }
-        },
-    )
-}
-
 private fun formatTime(seconds: Double): String {
     val total = seconds.coerceAtLeast(0.0).roundToInt()
-    val m = total / 60
-    val s = total % 60
-    return "%02d:%02d".format(m, s)
+    return "%02d:%02d".format(total / 60, total % 60)
 }
 
 private fun saveToGallery(context: Context, source: File): Boolean {
