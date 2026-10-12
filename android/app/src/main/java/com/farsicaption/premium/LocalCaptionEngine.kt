@@ -286,5 +286,5 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return "%d:%02d:%02d.%02d".format(h, m, s, c)
     }
 
-    private fun q(path: String): String = ""${path.replace(""", "\\"")}""
+    private fun q(path: String): String = "\'" + path + "\'"
 }
