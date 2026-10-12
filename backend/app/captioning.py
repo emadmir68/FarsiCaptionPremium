@@ -57,17 +57,9 @@ def filter_words(words: Iterable[Word], speech_intervals: list[tuple[float, floa
     return out
 
 
-def group_words(
-    words: list[Word],
-    *,
-    max_words: int = 5,
-    max_chars: int = 34,
-    max_duration: float = 2.8,
-    gap_break: float = 0.48,
-) -> list[Caption]:
+def group_words(words: list[Word], *, max_words: int = 5, max_chars: int = 36, max_duration: float = 2.8, gap_break: float = 0.48) -> list[Caption]:
     if not words:
         return []
-
     captions: list[Caption] = []
     buf: list[Word] = []
 
@@ -84,35 +76,16 @@ def group_words(
         if not buf:
             buf = [w]
             continue
-
         gap = w.start - buf[-1].end
         candidate_text = " ".join(x.text for x in [*buf, w])
         candidate_duration = w.end - buf[0].start
-
-        must_break = (
-            gap > gap_break
-            or len(buf) >= max_words
-            or len(candidate_text) > max_chars
-            or candidate_duration > max_duration
-        )
-        if must_break:
+        if gap > gap_break or len(buf) >= max_words or len(candidate_text) > max_chars or candidate_duration > max_duration:
             flush()
             buf = [w]
         else:
             buf.append(w)
-
     flush()
-
-    adjusted: list[Caption] = []
-    for i, c in enumerate(captions):
-        end = c.end
-        if i + 1 < len(captions):
-            next_start = captions[i + 1].start
-            end = min(end + 0.06, max(c.start + 0.18, next_start - 0.025))
-        else:
-            end += 0.06
-        adjusted.append(Caption(c.text, c.start, end, c.words))
-    return adjusted
+    return captions
 
 
 def _srt_time(seconds: float) -> str:
@@ -144,8 +117,17 @@ def _ass_escape_plain(text: str) -> str:
     return text.replace("\n", "\\N")
 
 
-def _ass_escape(text: str) -> str:
-    return "\u200f" + _ass_escape_plain(text)
+def _style_for(preset: str) -> tuple[str, str, str, int, float, float]:
+    p = (preset or "luxury").lower()
+    if p == "bold":
+        return "&H00FFFFFF", "&H0000D7FF", "&H00101010", 1, 4.4, 1.4
+    if p == "neon":
+        return "&H00F7FFF8", "&H0000FF9D", "&H00160B23", 1, 4.0, 2.0
+    if p == "glass":
+        return "&H00FFFFFF", "&H00E8D6B0", "&H66000000", 3, 1.6, 0.0
+    if p == "minimal":
+        return "&H00FFFFFF", "&H00FFFFFF", "&H00111111", 1, 2.8, 0.6
+    return "&H00FFF8E8", "&H006BCBFF", "&H00100D08", 1, 3.8, 1.2
 
 
 def to_ass(
@@ -153,10 +135,12 @@ def to_ass(
     *,
     font_name: str = "Noto Sans Arabic",
     font_size: int = 52,
-    margin_v: int = 90,
+    margin_v: int = 110,
     progressive: bool = True,
     active_word_highlight: bool = False,
+    preset: str = "luxury",
 ) -> str:
+    primary, secondary, back, border_style, outline, shadow = _style_for(preset)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -166,12 +150,12 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Premium,{font_name},{font_size},&H00FFFFFF,&H0000D7FF,&H00111111,&H7F000000,-1,0,0,0,100,100,0,0,1,3.2,1.2,2,70,70,{margin_v},1
+Style: Premium,{font_name},{font_size},{primary},{secondary},&H00111111,{back},-1,0,0,0,100,100,0,0,{border_style},{outline},{shadow},2,70,70,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    events = []
+    events: list[str] = []
     for c in captions:
         if progressive and c.words:
             for i, w in enumerate(c.words):
@@ -179,14 +163,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 end = c.end if i == len(c.words) - 1 else min(c.end, max(start + 0.05, c.words[i + 1].start - 0.012))
                 previous = " ".join(x.text for x in c.words[:i]).strip()
                 current = _ass_escape_plain(w.text)
-                if active_word_highlight:
-                    current = r"{\c&H00D7FF&}" + current + r"{\c&HFFFFFF&}"
                 body = "\u200f" + (_ass_escape_plain(previous) + (" " if previous else "") + current).strip()
-                events.append(
-                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Premium,,0,0,0,,{body}"
-                )
+                events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Premium,,0,0,0,,{body}")
         else:
-            events.append(
-                f"Dialogue: 0,{_ass_time(c.start)},{_ass_time(c.end)},Premium,,0,0,0,,{_ass_escape(c.text)}"
-            )
+            body = "\u200f" + _ass_escape_plain(c.text)
+            events.append(f"Dialogue: 0,{_ass_time(c.start)},{_ass_time(c.end)},Premium,,0,0,0,,{body}")
     return header + "\n".join(events) + "\n"
