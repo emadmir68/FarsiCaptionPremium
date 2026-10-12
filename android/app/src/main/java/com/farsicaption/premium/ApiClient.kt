@@ -25,6 +25,7 @@ data class CaptionItem(
     val start: Double,
     val end: Double,
     val words: List<TimedWord> = emptyList(),
+    val originalText: String = text,
 )
 
 data class TranscriptionResult(
