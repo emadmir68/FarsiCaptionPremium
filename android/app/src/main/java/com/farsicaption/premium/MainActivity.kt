@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,6 +74,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -558,6 +560,7 @@ private fun EditorScreen(
                 textColorKey = textColorKey,
                 backgroundKey = backgroundKey,
                 seekTarget = seekTarget,
+                onMarginV = onMarginV,
                 onPosition = onPosition,
                 onSeekConsumed = onSeekConsumed,
             )
@@ -625,6 +628,7 @@ private fun VideoStage(
     textColorKey: String,
     backgroundKey: String,
     seekTarget: Double?,
+    onMarginV: (Float) -> Unit,
     onPosition: (Double) -> Unit,
     onSeekConsumed: () -> Unit,
 ) {
@@ -679,6 +683,14 @@ private fun VideoStage(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .pointerInput(marginV) {
+                        detectDragGestures { _, dragAmount ->
+                            onMarginV(
+                                (marginV - dragAmount.y * 1.25f)
+                                    .coerceIn(50f, 300f)
+                            )
+                        }
+                    }
                     .padding(bottom = (34 + marginV / 6f).dp, start = 24.dp, end = 24.dp),
             ) {
                 Text(
