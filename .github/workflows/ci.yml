@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: farsi-caption-stable-alpha
+  cancel-in-progress: true
+
 jobs:
   android-apk:
     runs-on: ubuntu-latest
@@ -27,10 +31,20 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
-      - name: Restore stable alpha signing key
+      - name: Restore stable alpha signing cache
+        uses: actions/cache@v4
+        with:
+          path: android/signing/farsi-caption-dev.jks
+          key: farsi-caption-stable-signing-v1
+
+      - name: Ensure stable alpha signing key
+        shell: bash
         run: |
           mkdir -p android/signing
-          base64 --decode .github/signing/farsi-caption-dev.jks.b64 > android/signing/farsi-caption-dev.jks
+          if [ ! -s android/signing/farsi-caption-dev.jks ]; then
+            keytool -genkeypair               -keystore android/signing/farsi-caption-dev.jks               -storepass FarsiCaptionDev2026               -keypass FarsiCaptionDev2026               -alias farsicaption               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=FarsiCaptionPremium Alpha, OU=Development, O=FarsiCaption, L=Local, ST=Local, C=US"
+          fi
+          keytool -list             -keystore android/signing/farsi-caption-dev.jks             -storepass FarsiCaptionDev2026             -alias farsicaption >/dev/null
 
       - name: Test Persian text pipeline
         working-directory: android
@@ -54,5 +68,5 @@ jobs:
           if gh release view v3.2-stable-alpha >/dev/null 2>&1; then
             gh release upload v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk --clobber
           else
-            gh release create v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.2 Stable Alpha" --notes "Stable-signing alpha baseline for in-place future updates. Includes adaptive Persian ASR, Large-V3-Turbo on capable devices with Small fallback, audio enhancement, self-learning Persian corrections, Persian normalization, improved word timing, progressive captions, direct drag positioning, and premium styling."
+            gh release create v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk               --target "$GITHUB_SHA"               --title "FarsiCaptionPremium v3.2 Stable Alpha"               --notes "Stable-signing alpha baseline for in-place future updates. Includes adaptive Persian ASR, Large-V3-Turbo on capable devices with Small fallback, speech-focused audio enhancement, self-learning Persian corrections, Persian normalization, improved word timing, progressive captions, direct drag positioning, and premium styling."
           fi
