@@ -13,34 +13,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: android-actions/setup-android@v3
         with:
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+
+      - name: Restore stable alpha signing key
+        run: |
+          mkdir -p android/signing
+          base64 --decode .github/signing/farsi-caption-dev.jks.b64 > android/signing/farsi-caption-dev.jks
+
       - name: Test Persian text pipeline
         working-directory: android
         run: gradle :app:testDebugUnitTest --stacktrace
-      - name: Build debug APK
+
+      - name: Build signed debug APK
         working-directory: android
         run: gradle :app:assembleDebug --stacktrace
+
       - uses: actions/upload-artifact@v4
         with:
-          name: FarsiCaptionPremium-v3.1-adaptive-turbo-apk
+          name: FarsiCaptionPremium-v3.2-stable-alpha-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish Premium v3.1 APK
+
+      - name: Publish Premium v3.2 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.1-adaptive-turbo.apk
-          if gh release view v3.1-adaptive-turbo >/dev/null 2>&1; then
-            gh release upload v3.1-adaptive-turbo FarsiCaptionPremium-v3.1-adaptive-turbo.apk --clobber
+          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.2-stable-alpha.apk
+          if gh release view v3.2-stable-alpha >/dev/null 2>&1; then
+            gh release upload v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk --clobber
           else
-            gh release create v3.1-adaptive-turbo FarsiCaptionPremium-v3.1-adaptive-turbo.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.1 Offline Premium" --notes "Adaptive Persian-first Auto Caption: Large-V3-Turbo on capable phones with automatic Small fallback, speech-focused audio enhancement, self-learning Persian corrections, hardened Unicode/ZWNJ normalization, weighted word timing, progressive captions, direct drag positioning, and premium styling."
+            gh release create v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.2 Stable Alpha" --notes "Stable-signing alpha baseline for in-place future updates. Includes adaptive Persian ASR, Large-V3-Turbo on capable devices with Small fallback, audio enhancement, self-learning Persian corrections, Persian normalization, improved word timing, progressive captions, direct drag positioning, and premium styling."
           fi
