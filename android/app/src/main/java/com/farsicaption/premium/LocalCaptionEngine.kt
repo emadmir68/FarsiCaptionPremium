@@ -1,5 +1,6 @@
 package com.farsicaption.premium
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
 import com.arthenica.ffmpegkit.FFmpegKit
@@ -18,10 +19,33 @@ class LocalCaptionEngine(private val context: Context) {
 
     private val correctionStore = UserCorrectionStore(context)
 
+    private data class ModelSpec(
+        val name: String,
+        val url: String,
+        val label: String,
+        val expectedMinBytes: Long,
+        val downloadLabel: String,
+    )
+
     companion object {
-        private const val MODEL_NAME = "ggml-small.bin"
-        private const val MODEL_URL =
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+        private val SMALL_MODEL = ModelSpec(
+            name = "ggml-small.bin",
+            url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+            label = "Whisper Small",
+            expectedMinBytes = 350_000_000L,
+            downloadLabel = "~466MB",
+        )
+
+        private val TURBO_MODEL = ModelSpec(
+            name = "ggml-large-v3-turbo.bin",
+            url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+            label = "Whisper Large‑V3‑Turbo",
+            expectedMinBytes = 1_100_000_000L,
+            downloadLabel = "~1.5GB",
+        )
+
+        // Large-V3-Turbo is selected only when the device has enough physical RAM.
+        private const val TURBO_MIN_RAM_BYTES = 6L * 1024L * 1024L * 1024L
     }
 
     private val client = OkHttpClient.Builder()
@@ -36,55 +60,128 @@ class LocalCaptionEngine(private val context: Context) {
         onStatus: (String) -> Unit,
         onModelProgress: (Int) -> Unit = {},
     ): TranscriptionResult = withContext(Dispatchers.IO) {
-        val modelFile = ensureModel(onStatus, onModelProgress)
-        onStatus("در حال آماده‌سازی صدای ویدیو…")
+        val preferred = preferredModelSpec()
+        val initialModel = try {
+            ensureModel(preferred, onStatus, onModelProgress)
+        } catch (primaryError: Exception) {
+            if (preferred.name == SMALL_MODEL.name) throw primaryError
+            onStatus("دانلود موتور Turbo کامل نشد؛ در حال استفاده از موتور پایدار Small…")
+            ensureModel(SMALL_MODEL, onStatus, onModelProgress)
+        }
 
+        onStatus("در حال بهینه‌سازی صدا برای تشخیص فارسی…")
         val video = copyUriToCache(uri, "source-${System.currentTimeMillis()}.mp4")
         val audio = File(context.cacheDir, "speech-${System.currentTimeMillis()}.wav")
 
         try {
-            val extract = FFmpegKit.execute(
-                "-y -i ${q(video.absolutePath)} -vn -ac 1 -ar 16000 -c:a pcm_s16le ${q(audio.absolutePath)}"
+            extractSpeechOptimizedAudio(video, audio)
+
+            val captions = try {
+                transcribeAudioWithModel(
+                    modelFile = initialModel,
+                    audio = audio,
+                    maxWords = maxWords,
+                    onStatus = onStatus,
+                )
+            } catch (primaryError: Exception) {
+                if (initialModel.name == SMALL_MODEL.name) throw primaryError
+
+                onStatus("Turbo روی این دستگاه پایدار نبود؛ بازگشت خودکار به Whisper Small…")
+                val fallback = ensureModel(SMALL_MODEL, onStatus, onModelProgress)
+                transcribeAudioWithModel(
+                    modelFile = fallback,
+                    audio = audio,
+                    maxWords = maxWords,
+                    onStatus = onStatus,
+                )
+            }
+
+            if (captions.isEmpty()) {
+                error("گفتار فارسی قابل استفاده‌ای پیدا نشد")
+            }
+
+            TranscriptionResult(
+                fullText = captions.joinToString(" ") { it.text },
+                duration = captions.maxOfOrNull { it.end } ?: 0.0,
+                captions = captions,
             )
-            if (!ReturnCode.isSuccess(extract.returnCode)) {
-                error("استخراج صدا انجام نشد")
-            }
-
-            onStatus("در حال تشخیص گفتار فارسی روی گوشی…")
-            val model = Whisper.loadModel(context, modelFile.absolutePath)
-            try {
-                val result = Whisper.transcribe(
-                    model,
-                    audio.absolutePath,
-                    WhisperConfig(language = "fa"),
-                )
-
-                val captions = mutableListOf<CaptionItem>()
-                result.segments.forEach { segment ->
-                    val cleaned = cleanSpeechText(segment.text)
-                    if (cleaned.isBlank()) return@forEach
-
-                    val start = segment.startMs.toDouble() / 1000.0
-                    val end = max(start + 0.18, segment.endMs.toDouble() / 1000.0)
-                    captions += splitSegment(cleaned, start, end, maxWords.coerceIn(2, 7))
-                }
-
-                if (captions.isEmpty()) {
-                    error("گفتار فارسی قابل استفاده‌ای پیدا نشد")
-                }
-
-                TranscriptionResult(
-                    fullText = captions.joinToString(" ") { it.text },
-                    duration = captions.maxOfOrNull { it.end } ?: 0.0,
-                    captions = captions,
-                )
-            } finally {
-                Whisper.releaseModel(model)
-            }
         } finally {
             video.delete()
             audio.delete()
         }
+    }
+
+    private suspend fun transcribeAudioWithModel(
+        modelFile: File,
+        audio: File,
+        maxWords: Int,
+        onStatus: (String) -> Unit,
+    ): List<CaptionItem> {
+        val label = if (modelFile.name == TURBO_MODEL.name) TURBO_MODEL.label else SMALL_MODEL.label
+        onStatus("در حال تشخیص گفتار فارسی با $label…")
+
+        val model = Whisper.loadModel(context, modelFile.absolutePath)
+        return try {
+            val threads = Runtime.getRuntime().availableProcessors().coerceIn(4, 8)
+            val result = Whisper.transcribe(
+                model,
+                audio.absolutePath,
+                WhisperConfig(
+                    language = "fa",
+                    threads = threads,
+                    printTimestamps = true,
+                ),
+            )
+
+            val captions = mutableListOf<CaptionItem>()
+            result.segments.forEach { segment ->
+                val cleaned = cleanSpeechText(segment.text)
+                if (cleaned.isBlank()) return@forEach
+
+                val start = segment.startMs.toDouble() / 1000.0
+                val end = max(start + 0.18, segment.endMs.toDouble() / 1000.0)
+                captions += splitSegment(cleaned, start, end, maxWords.coerceIn(2, 7))
+            }
+
+            dedupeLikelyHallucinations(captions)
+        } finally {
+            Whisper.releaseModel(model)
+        }
+    }
+
+    private fun extractSpeechOptimizedAudio(video: File, audio: File) {
+        // Gentle speech-focused preprocessing: remove rumble/high-frequency noise,
+        // reduce stationary noise, then normalize loudness for more stable ASR.
+        val enhanced = FFmpegKit.execute(
+            "-y -i ${q(video.absolutePath)} -vn -ac 1 -ar 16000 " +
+                "-af \"highpass=f=75,lowpass=f=7800,afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11\" " +
+                "-c:a pcm_s16le ${q(audio.absolutePath)}"
+        )
+        if (ReturnCode.isSuccess(enhanced.returnCode) && audio.exists() && audio.length() > 1024L) {
+            return
+        }
+
+        // Never block transcription just because a filter is unavailable on a device.
+        val basic = FFmpegKit.execute(
+            "-y -i ${q(video.absolutePath)} -vn -ac 1 -ar 16000 -c:a pcm_s16le ${q(audio.absolutePath)}"
+        )
+        if (!ReturnCode.isSuccess(basic.returnCode)) {
+            error("استخراج صدا انجام نشد")
+        }
+    }
+
+    private fun dedupeLikelyHallucinations(items: List<CaptionItem>): List<CaptionItem> {
+        if (items.size < 2) return items
+        val out = mutableListOf<CaptionItem>()
+        for (item in items) {
+            val previous = out.lastOrNull()
+            val sameText = previous != null &&
+                previous.text.replace("‌", "").trim() == item.text.replace("‌", "").trim()
+            val tinyGap = previous != null && item.start - previous.end < 0.45
+            if (sameText && tinyGap) continue
+            out += item
+        }
+        return out
     }
 
     suspend fun export(
@@ -131,41 +228,68 @@ class LocalCaptionEngine(private val context: Context) {
         }
     }
 
-    fun isModelReady(): Boolean = modelFile().exists() && modelFile().length() > 100_000_000L
+    fun preferredModelLabel(): String = preferredModelSpec().label
 
-    private fun modelFile(): File {
+    fun preferredModelDownloadLabel(): String = preferredModelSpec().downloadLabel
+
+    fun isModelReady(): Boolean {
+        val preferred = preferredModelSpec()
+        val preferredFile = modelFile(preferred)
+        if (preferredFile.exists() && preferredFile.length() >= preferred.expectedMinBytes) return true
+
+        // A valid Small model is still considered ready because it is the automatic fallback.
+        val small = modelFile(SMALL_MODEL)
+        return small.exists() && small.length() >= SMALL_MODEL.expectedMinBytes
+    }
+
+    private fun preferredModelSpec(): ModelSpec {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        manager.getMemoryInfo(info)
+        return if (info.totalMem >= TURBO_MIN_RAM_BYTES) TURBO_MODEL else SMALL_MODEL
+    }
+
+    private fun modelFile(spec: ModelSpec): File {
         val dir = File(context.filesDir, "models").apply { mkdirs() }
-        return File(dir, MODEL_NAME)
+        return File(dir, spec.name)
     }
 
     private fun ensureModel(
+        spec: ModelSpec,
         onStatus: (String) -> Unit,
         onProgress: (Int) -> Unit,
     ): File {
-        val target = modelFile()
-        if (target.exists() && target.length() > 100_000_000L) return target
+        val target = modelFile(spec)
+        if (target.exists() && target.length() >= spec.expectedMinBytes) return target
 
-        onStatus("دانلود یک‌باره موتور فارسی باکیفیت (~466MB)…")
-        val part = File(target.parentFile, "$MODEL_NAME.part")
+        onStatus("دانلود یک‌باره ${spec.label} (${spec.downloadLabel})…")
+        val part = File(target.parentFile, "${spec.name}.part")
         if (part.exists()) part.delete()
 
-        val request = Request.Builder().url(MODEL_URL).build()
+        val request = Request.Builder().url(spec.url).build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("دانلود موتور فارسی ناموفق بود: ${response.code}")
+            if (!response.isSuccessful) {
+                error("دانلود موتور فارسی ناموفق بود: ${response.code}")
+            }
             val body = response.body ?: error("فایل موتور خالی بود")
             val total = body.contentLength()
+
             body.byteStream().use { input ->
                 part.outputStream().use { output ->
-                    val buffer = ByteArray(128 * 1024)
+                    val buffer = ByteArray(256 * 1024)
                     var downloaded = 0L
                     var lastProgress = -1
+
                     while (true) {
                         val n = input.read(buffer)
                         if (n < 0) break
                         output.write(buffer, 0, n)
                         downloaded += n
+
                         if (total > 0) {
-                            val progress = ((downloaded * 100) / total).toInt().coerceIn(0, 100)
+                            val progress = ((downloaded * 100) / total)
+                                .toInt()
+                                .coerceIn(0, 100)
                             if (progress != lastProgress) {
                                 lastProgress = progress
                                 onProgress(progress)
@@ -176,10 +300,11 @@ class LocalCaptionEngine(private val context: Context) {
             }
         }
 
-        if (part.length() < 100_000_000L) {
+        if (part.length() < spec.expectedMinBytes) {
             part.delete()
             error("دانلود موتور ناقص بود")
         }
+
         if (target.exists()) target.delete()
         if (!part.renameTo(target)) {
             part.copyTo(target, overwrite = true)
