@@ -205,27 +205,75 @@ class LocalCaptionEngine(private val context: Context) {
     ): List<CaptionItem> {
         val tokens = text.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
-        val chunks = tokens.chunked(maxWords)
-        val span = max(0.2, end - start)
-        val wordStep = span / tokens.size
-        var globalIndex = 0
 
-        return chunks.map { chunk ->
-            val chunkStart = start + globalIndex * wordStep
-            val words = chunk.mapIndexed { index, token ->
-                val a = start + (globalIndex + index) * wordStep
-                val b = start + (globalIndex + index + 1) * wordStep
-                TimedWord(token, a, max(a + 0.04, b))
+        val chunks = smartChunks(tokens, maxWords)
+        val span = max(0.2, end - start)
+
+        val weights = tokens.map { token ->
+            token.replace(Regex("[،؛:,.!?؟«»]"), "")
+                .replace("‌", "")
+                .length.coerceIn(1, 10).toDouble()
+        }
+        val totalWeight = weights.sum().coerceAtLeast(1.0)
+
+        val starts = MutableList(tokens.size) { start }
+        val ends = MutableList(tokens.size) { start }
+        var cursor = start
+        tokens.indices.forEach { index ->
+            starts[index] = cursor
+            cursor += span * (weights[index] / totalWeight)
+            ends[index] = minOf(end, max(starts[index] + 0.04, cursor))
+        }
+        ends[ends.lastIndex] = end
+
+        val result = mutableListOf<CaptionItem>()
+        var globalIndex = 0
+        chunks.forEach { chunk ->
+            val words = chunk.mapIndexed { localIndex, token ->
+                val idx = globalIndex + localIndex
+                TimedWord(token, starts[idx], ends[idx])
             }
-            globalIndex += chunk.size
-            val chunkEnd = words.lastOrNull()?.end ?: chunkStart + 0.2
-            CaptionItem(
+            val chunkStart = words.first().start
+            val chunkEnd = words.last().end
+            result += CaptionItem(
                 text = chunk.joinToString(" "),
                 start = chunkStart,
-                end = chunkEnd,
+                end = max(chunkStart + 0.12, chunkEnd),
                 words = words,
             )
+            globalIndex += chunk.size
         }
+        return result
+    }
+
+    private fun smartChunks(tokens: List<String>, maxWords: Int): List<List<String>> {
+        if (tokens.size <= maxWords) return listOf(tokens)
+
+        val output = mutableListOf<List<String>>()
+        var index = 0
+        while (index < tokens.size) {
+            val hardEnd = minOf(tokens.size, index + maxWords)
+            var end = hardEnd
+
+            for (candidate in hardEnd - 1 downTo maxOf(index + 1, hardEnd - 2)) {
+                val token = tokens[candidate]
+                if (
+                    token.endsWith("،") ||
+                    token.endsWith("؛") ||
+                    token.endsWith(".") ||
+                    token.endsWith("!") ||
+                    token.endsWith("؟") ||
+                    token.endsWith("?")
+                ) {
+                    end = candidate + 1
+                    break
+                }
+            }
+
+            output += tokens.subList(index, end)
+            index = end
+        }
+        return output
     }
 
     private fun cleanSpeechText(raw: String): String {
