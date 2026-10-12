@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val stableDevKeystore = rootProject.file("signing/farsi-caption-dev.jks")
+
 android {
     namespace = "com.farsicaption.premium"
     compileSdk = 35
@@ -12,14 +14,30 @@ android {
         applicationId = "com.farsicaption.premium"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "3.1.0-adaptive-turbo"
+        versionCode = 32
+        versionName = "3.2.0-stable-alpha"
+    }
+
+    signingConfigs {
+        create("stableDev") {
+            storeFile = stableDevKeystore
+            storePassword = "FarsiCaptionDev2026"
+            keyAlias = "farsicaption"
+            keyPassword = "FarsiCaptionDev2026"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("stableDev")
+        }
         release {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("stableDev")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
