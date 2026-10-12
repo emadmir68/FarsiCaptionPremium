@@ -133,6 +133,8 @@ private fun PremiumCaptionApp() {
     var preset by remember { mutableStateOf("luxury") }
     var fontSize by remember { mutableFloatStateOf(56f) }
     var marginV by remember { mutableFloatStateOf(120f) }
+    var textColorKey by remember { mutableStateOf("cream") }
+    var backgroundKey by remember { mutableStateOf("none") }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -182,6 +184,8 @@ private fun PremiumCaptionApp() {
                         preset = preset,
                         fontSize = fontSize,
                         marginV = marginV,
+                        textColorKey = textColorKey,
+                        backgroundKey = backgroundKey,
                         onPosition = { currentPosition = it },
                         onSeekConsumed = { seekTarget = null },
                         onBack = {
@@ -193,6 +197,8 @@ private fun PremiumCaptionApp() {
                         onPreset = { preset = it },
                         onFontSize = { fontSize = it },
                         onMarginV = { marginV = it },
+                        onTextColor = { textColorKey = it },
+                        onBackground = { backgroundKey = it },
                         onSelectCaption = { index ->
                             selectedIndex = index
                             seekTarget = captions.getOrNull(index)?.start
@@ -239,6 +245,8 @@ private fun PremiumCaptionApp() {
                                             preset = preset,
                                             fontSize = fontSize.roundToInt(),
                                             marginV = marginV.roundToInt(),
+                                            textColorKey = textColorKey,
+                                            backgroundKey = backgroundKey,
                                             onStatus = { status = it },
                                         )
                                     }.onSuccess { file ->
@@ -437,6 +445,8 @@ private fun EditorScreen(
     preset: String,
     fontSize: Float,
     marginV: Float,
+    textColorKey: String,
+    backgroundKey: String,
     onPosition: (Double) -> Unit,
     onSeekConsumed: () -> Unit,
     onBack: () -> Unit,
@@ -445,6 +455,8 @@ private fun EditorScreen(
     onPreset: (String) -> Unit,
     onFontSize: (Float) -> Unit,
     onMarginV: (Float) -> Unit,
+    onTextColor: (String) -> Unit,
+    onBackground: (String) -> Unit,
     onSelectCaption: (Int) -> Unit,
     onEditCaption: (Int, String) -> Unit,
     onTranscribe: () -> Unit,
@@ -539,6 +551,8 @@ private fun EditorScreen(
                 preset = preset,
                 fontSize = fontSize,
                 marginV = marginV,
+                textColorKey = textColorKey,
+                backgroundKey = backgroundKey,
                 seekTarget = seekTarget,
                 onPosition = onPosition,
                 onSeekConsumed = onSeekConsumed,
@@ -577,7 +591,18 @@ private fun EditorScreen(
 
                 when (tab) {
                     "text" -> TextEditor(captions, selectedIndex, onSelectCaption, onEditCaption)
-                    "style" -> StyleEditor(preset, fontSize, marginV, onPreset, onFontSize, onMarginV)
+                    "style" -> StyleEditor(
+                        preset = preset,
+                        fontSize = fontSize,
+                        marginV = marginV,
+                        textColorKey = textColorKey,
+                        backgroundKey = backgroundKey,
+                        onPreset = onPreset,
+                        onFontSize = onFontSize,
+                        onMarginV = onMarginV,
+                        onTextColor = onTextColor,
+                        onBackground = onBackground,
+                    )
                     else -> TimingPanel(captions, selectedIndex)
                 }
             }
@@ -593,6 +618,8 @@ private fun VideoStage(
     preset: String,
     fontSize: Float,
     marginV: Float,
+    textColorKey: String,
+    backgroundKey: String,
     seekTarget: Double?,
     onPosition: (Double) -> Unit,
     onSeekConsumed: () -> Unit,
@@ -642,13 +669,9 @@ private fun VideoStage(
         )
 
         if (captionText.isNotBlank()) {
-            val styleColor = when (preset) {
-                "neon" -> Mint
-                "luxury" -> GoldSoft
-                else -> Color.White
-            }
+            val styleColor = captionTextColor(textColorKey)
             Surface(
-                color = if (preset == "glass") Color.Black.copy(alpha = 0.55f) else Color.Transparent,
+                color = captionBackgroundColor(backgroundKey),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -818,9 +841,13 @@ private fun StyleEditor(
     preset: String,
     fontSize: Float,
     marginV: Float,
+    textColorKey: String,
+    backgroundKey: String,
     onPreset: (String) -> Unit,
     onFontSize: (Float) -> Unit,
     onMarginV: (Float) -> Unit,
+    onTextColor: (String) -> Unit,
+    onBackground: (String) -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("استایل کپشن", color = TextPrimary, fontWeight = FontWeight.Bold)
@@ -851,9 +878,102 @@ private fun StyleEditor(
             }
         }
         Text("اندازه متن: ${fontSize.roundToInt()}", color = TextMuted, fontSize = 12.sp)
-        Slider(value = fontSize, onValueChange = onFontSize, valueRange = 38f..76f)
+        Slider(value = fontSize, onValueChange = onFontSize, valueRange = 30f..90f)
+
+        Text("رنگ متن", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            itemsIndexed(captionTextColors) { _, option ->
+                CaptionColorChip(
+                    label = option.label,
+                    swatch = option.color,
+                    selected = textColorKey == option.key,
+                    onClick = { onTextColor(option.key) },
+                )
+            }
+        }
+
+        Text("پس‌زمینه متن", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            itemsIndexed(captionBackgrounds) { _, option ->
+                CaptionColorChip(
+                    label = option.label,
+                    swatch = option.color,
+                    selected = backgroundKey == option.key,
+                    onClick = { onBackground(option.key) },
+                    transparent = option.key == "none",
+                )
+            }
+        }
+
         Text("فاصله از پایین: ${marginV.roundToInt()}", color = TextMuted, fontSize = 12.sp)
         Slider(value = marginV, onValueChange = onMarginV, valueRange = 50f..300f)
+    }
+}
+
+
+private data class CaptionColorChoice(
+    val key: String,
+    val label: String,
+    val color: Color,
+)
+
+private val captionTextColors = listOf(
+    CaptionColorChoice("white", "سفید", Color.White),
+    CaptionColorChoice("cream", "کرم", Color(0xFFFFE2A6)),
+    CaptionColorChoice("yellow", "زرد", Color(0xFFFFE45C)),
+    CaptionColorChoice("cyan", "آبی", Color(0xFF75E6FF)),
+    CaptionColorChoice("mint", "سبز", Color(0xFF83F5C8)),
+    CaptionColorChoice("red", "قرمز", Color(0xFFFF6B6B)),
+    CaptionColorChoice("black", "مشکی", Color(0xFF111111)),
+)
+
+private val captionBackgrounds = listOf(
+    CaptionColorChoice("none", "بدون", Color.Transparent),
+    CaptionColorChoice("black60", "مشکی شفاف", Color.Black.copy(alpha = 0.60f)),
+    CaptionColorChoice("black90", "مشکی", Color.Black.copy(alpha = 0.90f)),
+    CaptionColorChoice("white80", "سفید", Color.White.copy(alpha = 0.82f)),
+    CaptionColorChoice("gold80", "طلایی", Color(0xFFD6A83A).copy(alpha = 0.84f)),
+    CaptionColorChoice("navy80", "سرمه‌ای", Color(0xFF101A35).copy(alpha = 0.86f)),
+)
+
+private fun captionTextColor(key: String): Color =
+    captionTextColors.firstOrNull { it.key == key }?.color ?: GoldSoft
+
+private fun captionBackgroundColor(key: String): Color =
+    captionBackgrounds.firstOrNull { it.key == key }?.color ?: Color.Transparent
+
+@Composable
+private fun CaptionColorChip(
+    label: String,
+    swatch: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+    transparent: Boolean = false,
+) {
+    Surface(
+        color = if (selected) Gold.copy(alpha = 0.12f) else Panel,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, if (selected) Gold else Stroke),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(if (transparent) Panel2 else swatch),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (transparent) {
+                    Text("×", color = TextMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(label, color = if (selected) GoldSoft else TextPrimary, fontSize = 11.sp)
+        }
     }
 }
 
