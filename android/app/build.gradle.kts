@@ -33,6 +33,7 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         jniLibs.useLegacyPackaging = true
+        jniLibs.pickFirsts += setOf("**/libc++_shared.so")
     }
 }
 
@@ -51,9 +52,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
-    // Local, key-free Persian transcription.
     implementation("dev.ffmpegkit-maintained:whisper-android:1.0.0")
-
-    // Local audio extraction and subtitle burn-in.
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9")
 }
