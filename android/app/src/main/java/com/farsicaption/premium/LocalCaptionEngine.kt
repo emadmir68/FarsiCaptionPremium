@@ -91,6 +91,8 @@ class LocalCaptionEngine(private val context: Context) {
         preset: String,
         fontSize: Int,
         marginV: Int,
+        textColorKey: String,
+        backgroundKey: String,
         onStatus: (String) -> Unit,
     ): File = withContext(Dispatchers.IO) {
         require(captions.isNotEmpty()) { "زیرنویسی برای خروجی وجود ندارد" }
@@ -99,7 +101,17 @@ class LocalCaptionEngine(private val context: Context) {
         val video = copyUriToCache(uri, "export-source-${System.currentTimeMillis()}.mp4")
         val ass = File(context.cacheDir, "captions-${System.currentTimeMillis()}.ass")
         val output = File(context.cacheDir, "FarsiCaption-${System.currentTimeMillis()}.mp4")
-        ass.writeText(buildAss(captions, preset, fontSize, marginV), Charsets.UTF_8)
+        ass.writeText(
+            buildAss(
+                captions = captions,
+                preset = preset,
+                fontSize = fontSize,
+                marginV = marginV,
+                textColorKey = textColorKey,
+                backgroundKey = backgroundKey,
+            ),
+            Charsets.UTF_8,
+        )
 
         try {
             onStatus("در حال رندر ویدیو…")
@@ -215,11 +227,33 @@ class LocalCaptionEngine(private val context: Context) {
     }
 
     private fun cleanSpeechText(raw: String): String {
-        val text = raw
+        var text = raw
+            .replace('ي', 'ی')
+            .replace('ك', 'ک')
             .replace(Regex("\\[(music|موسیقی|silence|آهنگ)[^]]*]", RegexOption.IGNORE_CASE), " ")
             .replace(Regex("\\((music|موسیقی|silence|آهنگ)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+
+        val spacingFixes = listOf(
+            "هم کاران" to "همکاران",
+            "هم کار" to "همکار",
+            "هم کاری" to "همکاری",
+            "می شود" to "می‌شود",
+            "نمی شود" to "نمی‌شود",
+            "می کنم" to "می‌کنم",
+            "می کنیم" to "می‌کنیم",
+            "می کنید" to "می‌کنید",
+            "می کنند" to "می‌کنند",
+            "می خواهم" to "می‌خواهم",
+            "می خواهید" to "می‌خواهید",
+            "می تواند" to "می‌تواند",
+            "می توانند" to "می‌توانند",
+            "نمی توان" to "نمی‌توان",
+        )
+        spacingFixes.forEach { (wrong, right) ->
+            text = text.replace(wrong, right)
+        }
 
         val normalized = text.lowercase()
         if (
@@ -237,14 +271,32 @@ class LocalCaptionEngine(private val context: Context) {
         preset: String,
         fontSize: Int,
         marginV: Int,
+        textColorKey: String,
+        backgroundKey: String,
     ): String {
-        val primary = when (preset) {
-            "luxury" -> "&H00FFF0D1"
-            "neon" -> "&H00C8FFD8"
-            else -> "&H00FFFFFF"
+        val primary = when (textColorKey) {
+            "white" -> "&H00FFFFFF"
+            "cream" -> "&H00A6E2FF"
+            "yellow" -> "&H005CE4FF"
+            "cyan" -> "&H00FFE675"
+            "mint" -> "&H00C8F583"
+            "red" -> "&H006B6BFF"
+            "black" -> "&H00111111"
+            else -> when (preset) {
+                "luxury" -> "&H00A6E2FF"
+                "neon" -> "&H00C8F583"
+                else -> "&H00FFFFFF"
+            }
         }
-        val borderStyle = if (preset == "glass") 3 else 1
-        val back = if (preset == "glass") "&H70000000" else "&H00000000"
+
+        val (borderStyle, back) = when (backgroundKey) {
+            "black60" -> 3 to "&H66000000"
+            "black90" -> 3 to "&H1A000000"
+            "white80" -> 3 to "&H33FFFFFF"
+            "gold80" -> 3 to "&H333AA8D6"
+            "navy80" -> 3 to "&H332A1A10"
+            else -> 1 to "&HFF000000"
+        }
         val outline = when (preset) {
             "minimal" -> 2
             "bold" -> 5
