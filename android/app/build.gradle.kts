@@ -12,8 +12,8 @@ android {
         applicationId = "com.farsicaption.premium"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "2.1.0-offline-premium"
+        versionCode = 22
+        versionName = "2.2.0-custom-style"
     }
 
     buildTypes {
