@@ -169,6 +169,8 @@ private fun PremiumCaptionApp() {
                 if (sourceUri == null) {
                     HomeScreen(
                         modelReady = engine.isModelReady(),
+                        engineLabel = engine.preferredModelLabel(),
+                        engineDownload = engine.preferredModelDownloadLabel(),
                         onPickVideo = { picker.launch(arrayOf("video/*")) },
                     )
                 } else {
@@ -283,6 +285,8 @@ private fun PremiumCaptionApp() {
 @Composable
 private fun HomeScreen(
     modelReady: Boolean,
+    engineLabel: String,
+    engineDownload: String,
     onPickVideo: () -> Unit,
 ) {
     Box(
@@ -359,9 +363,10 @@ private fun HomeScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                FeaturePill("Accuracy Max")
                 FeaturePill("بدون توکن")
                 FeaturePill("آفلاین")
-                FeaturePill("فارسی")
+                FeaturePill("RTL فارسی")
                 FeaturePill("خروجی MP4")
             }
 
@@ -371,10 +376,11 @@ private fun HomeScreen(
                 border = BorderStroke(1.dp, Stroke),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Premium Engine", color = GoldSoft, fontWeight = FontWeight.Bold)
-                    EngineRow("01", "Whisper Small فارسی", "مدل چندزبانه با اولویت دقت روی گوشی")
-                    EngineRow("02", "No Backend", "هیچ URL یا App Token لازم نیست")
-                    EngineRow("03", "Luxury Editor", "ویرایش متن، استایل، اندازه و جای کپشن")
+                    Text("Premium Engine • Adaptive Accuracy", color = GoldSoft, fontWeight = FontWeight.Bold)
+                    EngineRow("01", engineLabel, "انتخاب خودکار بالاترین مدل پایدار • دانلود $engineDownload")
+                    EngineRow("02", "Persian Clean Audio", "کاهش نویز + نرمال‌سازی صدا قبل از تشخیص")
+                    EngineRow("03", "Self‑Learning Persian", "اصلاحات دستی را یاد می‌گیرد و دفعه بعد خودکار اعمال می‌کند")
+                    EngineRow("04", "Luxury Editor", "Drag کپشن، رنگ، پس‌زمینه، اندازه و استایل زنده")
                 }
             }
         }
@@ -724,7 +730,7 @@ private fun AutoCaptionPanel(
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Auto Caption فارسی", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
             Text(
-                "بدون Backend و بدون App Token. بار اول موتور فارسی روی گوشی دانلود می‌شود و بعد پردازش محلی انجام می‌شود.",
+                "نسخه Ultra ابتدا صدا را برای گفتار بهینه می‌کند و روی گوشی‌های قوی از Large‑V3‑Turbo استفاده می‌کند؛ در صورت نیاز خودکار به Small برمی‌گردد. بدون Backend و بدون App Token.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
