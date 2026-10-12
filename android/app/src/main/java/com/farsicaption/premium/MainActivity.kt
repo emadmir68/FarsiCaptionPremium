@@ -238,6 +238,10 @@ private fun PremiumCaptionApp() {
                             if (uri != null && captions.isNotEmpty() && !isExporting) {
                                 isExporting = true
                                 scope.launch {
+                                    captions
+                                        .filter { it.originalText != it.text }
+                                        .forEach { engine.learnCorrection(it.originalText, it.text) }
+
                                     runCatching {
                                         engine.export(
                                             uri = uri,
