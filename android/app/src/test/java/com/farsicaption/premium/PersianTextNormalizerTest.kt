@@ -39,4 +39,20 @@ class PersianTextNormalizerTest {
             ),
         )
     }
+    @Test
+    fun normalizesPunctuationAndArabicForms() {
+        assertEquals(
+            "این یک تست، خوب است؟",
+            PersianTextNormalizer.normalize("اين يك تست, خوب است?"),
+        )
+    }
+
+    @Test
+    fun keepsCorrectSeparatedPhrase() {
+        assertEquals(
+            "در مورد این موضوع",
+            PersianTextNormalizer.normalize("در مورد این موضوع"),
+        )
+    }
+
 }
