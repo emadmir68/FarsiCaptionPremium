@@ -349,15 +349,42 @@ Style: Premium,sans-serif,${fontSize.coerceIn(36,82)},$primary,&H00FFFFFF,&H0010
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
-        val events = captions.joinToString("\n") { c ->
-            val clean = "\u200F" + c.text
-                .replace("\\", "\\\\")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace("\n", "\\N")
-            "Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Premium,,0,0,0,,$clean"
+        val events = mutableListOf<String>()
+
+        captions.forEach { caption ->
+            if (caption.words.isNotEmpty()) {
+                caption.words.forEachIndexed { index, word ->
+                    val start = max(caption.start, word.start)
+                    val end = if (index == caption.words.lastIndex) {
+                        caption.end
+                    } else {
+                        minOf(
+                            caption.end,
+                            max(start + 0.05, caption.words[index + 1].start - 0.01),
+                        )
+                    }
+                    val progressiveText = caption.words
+                        .take(index + 1)
+                        .joinToString(" ") { it.text }
+                    events += assDialogue(start, end, progressiveText)
+                }
+            } else {
+                events += assDialogue(caption.start, caption.end, caption.text)
+            }
         }
-        return header + events + "\n"
+
+        return header + events.joinToString("\n") + "\n"
+    }
+
+    private fun assDialogue(start: Double, end: Double, rawText: String): String {
+        val clean = "\u200F" + PersianTextNormalizer
+            .normalize(rawText, correctionStore.all())
+            .replace("\\", "\\\\")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace("\n", "\\N")
+
+        return "Dialogue: 0,${assTime(start)},${assTime(end)},Premium,,0,0,0,,$clean"
     }
 
     private fun assTime(seconds: Double): String {
