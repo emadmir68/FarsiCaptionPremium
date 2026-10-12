@@ -31,16 +31,16 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: FarsiCaptionPremium-v3.0-ultra-apk
+          name: FarsiCaptionPremium-v3.1-adaptive-turbo-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish Premium v3.0 APK
+      - name: Publish Premium v3.1 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.0-ultra.apk
-          if gh release view v3.0-ultra >/dev/null 2>&1; then
-            gh release upload v3.0-ultra FarsiCaptionPremium-v3.0-ultra.apk --clobber
+          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.1-adaptive-turbo.apk
+          if gh release view v3.1-adaptive-turbo >/dev/null 2>&1; then
+            gh release upload v3.1-adaptive-turbo FarsiCaptionPremium-v3.1-adaptive-turbo.apk --clobber
           else
-            gh release create v3.0-ultra FarsiCaptionPremium-v3.0-ultra.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.0 Offline Premium" --notes "Deep Persian-first offline Auto Caption with self-learning corrections, Persian normalization, improved word timing, progressive word-by-word export, direct caption positioning, and premium style controls."
+            gh release create v3.1-adaptive-turbo FarsiCaptionPremium-v3.1-adaptive-turbo.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v3.1 Offline Premium" --notes "Adaptive Persian-first Auto Caption: Large-V3-Turbo on capable phones with automatic Small fallback, speech-focused audio enhancement, self-learning Persian corrections, hardened Unicode/ZWNJ normalization, weighted word timing, progressive captions, direct drag positioning, and premium styling."
           fi
