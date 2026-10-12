@@ -4,7 +4,8 @@ import android.content.Context
 
 class UserCorrectionStore(context: Context) {
 
-    private val prefs = context.getSharedPreferences("persian_user_corrections", Context.MODE_PRIVATE)
+    private val prefs =
+        context.getSharedPreferences("persian_user_corrections", Context.MODE_PRIVATE)
 
     fun all(): Map<String, String> {
         return prefs.all
@@ -20,20 +21,24 @@ class UserCorrectionStore(context: Context) {
     fun learn(originalRaw: String, editedRaw: String) {
         val original = PersianTextNormalizer.normalize(originalRaw)
         val edited = PersianTextNormalizer.normalize(editedRaw)
+
         if (original.isBlank() || edited.isBlank() || original == edited) return
         if (original.length > 140 || edited.length > 140) return
 
         val editor = prefs.edit()
 
-        // Learn short phrase corrections directly.
         if (original.split(' ').size <= 7 && edited.split(' ').size <= 7) {
             editor.putString(original, edited)
         }
 
-        val before = original.split(Regex("\s+")).filter { it.isNotBlank() }
-        val after = edited.split(Regex("\s+")).filter { it.isNotBlank() }
+        val before = original
+            .split(Regex("""\s+"""))
+            .filter { it.isNotBlank() }
 
-        // 1-to-1 word corrections.
+        val after = edited
+            .split(Regex("""\s+"""))
+            .filter { it.isNotBlank() }
+
         if (before.size == after.size) {
             before.zip(after).forEach { (a, b) ->
                 if (a != b && a.length in 2..24 && b.length in 2..24) {
@@ -42,10 +47,9 @@ class UserCorrectionStore(context: Context) {
             }
         }
 
-        // Learn common "two words became one Persian word" fixes,
-        // e.g. "هم کاران" -> "همکاران".
         var i = 0
         var j = 0
+
         while (i < before.size && j < after.size) {
             if (before[i] == after[j]) {
                 i++
@@ -57,9 +61,16 @@ class UserCorrectionStore(context: Context) {
                 val joined = (before[i] + before[i + 1])
                     .replace("‌", "")
                     .replace(" ", "")
-                val target = after[j].replace("‌", "").replace(" ", "")
+
+                val target = after[j]
+                    .replace("‌", "")
+                    .replace(" ", "")
+
                 if (joined == target) {
-                    editor.putString(before[i] + " " + before[i + 1], after[j])
+                    editor.putString(
+                        before[i] + " " + before[i + 1],
+                        after[j],
+                    )
                     i += 2
                     j += 1
                     continue
