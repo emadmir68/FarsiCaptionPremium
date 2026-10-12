@@ -55,7 +55,7 @@ object PersianTextNormalizer {
         "نمی گوید" to "نمی‌گوید"
     )
 
-    private val ezafeLikeSuffixes = listOf("ها", "های", "تر", "ترین")
+    private val suffixes = listOf("ها", "های", "تر", "ترین")
 
     fun normalize(
         raw: String,
@@ -69,9 +69,9 @@ object PersianTextNormalizer {
             .replace('ك', 'ک')
             .replace('ۀ', 'ه')
             .replace("ـ", "")
-            .replace(Regex("[\u064B-\u065F\u0670]"), "")
-            .replace(Regex("[\u00A0\u2000-\u200A\u202F\u205F\u3000]"), " ")
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("""[\u064B-\u065F\u0670]"""), "")
+            .replace(Regex("""[\u00A0\u2000-\u200A\u202F\u205F\u3000]"""), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
         val combined = LinkedHashMap<String, String>()
@@ -84,30 +84,38 @@ object PersianTextNormalizer {
 
         combined.forEach { (wrong, right) ->
             if (wrong.isNotBlank() && wrong != right) {
-                text = text.replace(wrong, right, ignoreCase = false)
+                text = text.replace(wrong, right)
             }
         }
 
-        // Persian imperfective prefixes.
         text = text.replace(
-            Regex("(^|[\\s،؛:«(])نمی\s+([\u0600-\u06FF‌]+)")
-        ) { m -> m.groupValues[1] + "نمی‌" + m.groupValues[2] }
-        text = text.replace(
-            Regex("(^|[\\s،؛:«(])می\s+([\u0600-\u06FF‌]+)")
-        ) { m -> m.groupValues[1] + "می‌" + m.groupValues[2] }
-
-        // Common plural/comparative suffix spacing.
-        ezafeLikeSuffixes.forEach { suffix ->
-            text = text.replace(
-                Regex("([\u0600-\u06FF]+)\s+$suffix(?=\\s|$|[،؛.!؟])")
-            ) { m -> m.groupValues[1] + "‌" + suffix }
+            Regex("""(^|[\s،؛:«(])نمی\s+([\u0600-\u06FF‌]+)""")
+        ) { m ->
+            m.groupValues[1] + "نمی‌" + m.groupValues[2]
         }
 
-        // Clean punctuation spacing for Persian text.
+        text = text.replace(
+            Regex("""(^|[\s،؛:«(])می\s+([\u0600-\u06FF‌]+)""")
+        ) { m ->
+            m.groupValues[1] + "می‌" + m.groupValues[2]
+        }
+
+        suffixes.forEach { suffix ->
+            text = text.replace(
+                Regex("""([\u0600-\u06FF]+)\s+$suffix(?=\s|$|[،؛.!؟])""")
+            ) { m ->
+                m.groupValues[1] + "‌" + suffix
+            }
+        }
+
         text = text
-            .replace(Regex("\s+([،؛:,.!?؟])"), "$1")
-            .replace(Regex("([،؛:!?؟])([^\s»)])"), "$1 $2")
-            .replace(Regex("\\s+"), " ")
+            .replace(Regex("""\s+([،؛:,.!?؟])""")) { m ->
+                m.groupValues[1]
+            }
+            .replace(Regex("""([،؛:!?؟])([^\s»)])""")) { m ->
+                m.groupValues[1] + " " + m.groupValues[2]
+            }
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
         return text
