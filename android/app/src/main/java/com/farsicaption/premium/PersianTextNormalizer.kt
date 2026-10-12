@@ -71,7 +71,7 @@ object PersianTextNormalizer {
             .replace("ـ", "")
             .replace(Regex("[\u064B-\u065F\u0670]"), "")
             .replace(Regex("[\u00A0\u2000-\u200A\u202F\u205F\u3000]"), " ")
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
         val combined = LinkedHashMap<String, String>()
@@ -90,16 +90,16 @@ object PersianTextNormalizer {
 
         // Persian imperfective prefixes.
         text = text.replace(
-            Regex("(^|[\s،؛:«(])نمی\s+([\u0600-\u06FF‌]+)")
+            Regex("(^|[\\s،؛:«(])نمی\s+([\u0600-\u06FF‌]+)")
         ) { m -> m.groupValues[1] + "نمی‌" + m.groupValues[2] }
         text = text.replace(
-            Regex("(^|[\s،؛:«(])می\s+([\u0600-\u06FF‌]+)")
+            Regex("(^|[\\s،؛:«(])می\s+([\u0600-\u06FF‌]+)")
         ) { m -> m.groupValues[1] + "می‌" + m.groupValues[2] }
 
         // Common plural/comparative suffix spacing.
         ezafeLikeSuffixes.forEach { suffix ->
             text = text.replace(
-                Regex("([\u0600-\u06FF]+)\s+$suffix(?=\s|$|[،؛.!؟])")
+                Regex("([\u0600-\u06FF]+)\s+$suffix(?=\\s|$|[،؛.!؟])")
             ) { m -> m.groupValues[1] + "‌" + suffix }
         }
 
@@ -107,7 +107,7 @@ object PersianTextNormalizer {
         text = text
             .replace(Regex("\s+([،؛:,.!?؟])"), "$1")
             .replace(Regex("([،؛:!?؟])([^\s»)])"), "$1 $2")
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .trim()
 
         return text
