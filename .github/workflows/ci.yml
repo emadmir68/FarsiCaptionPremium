@@ -9,20 +9,6 @@ permissions:
   contents: write
 
 jobs:
-  backend-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install backend dependencies
-        working-directory: backend
-        run: pip install -r requirements.txt
-      - name: Run backend tests
-        working-directory: backend
-        run: PYTHONPATH=. pytest -q
-
   android-apk:
     runs-on: ubuntu-latest
     steps:
@@ -42,16 +28,16 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: FarsiCaptionPremium-v2-premium-apk
+          name: FarsiCaptionPremium-v2.1-offline-premium-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish Premium v2 APK
+      - name: Publish Premium v2.1 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v2.0-premium.apk
-          if gh release view v2.0-premium >/dev/null 2>&1; then
-            gh release upload v2.0-premium FarsiCaptionPremium-v2.0-premium.apk --clobber
+          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v2.1-offline-premium.apk
+          if gh release view v2.1-offline-premium >/dev/null 2>&1; then
+            gh release upload v2.1-offline-premium FarsiCaptionPremium-v2.1-offline-premium.apk --clobber
           else
-            gh release create v2.0-premium FarsiCaptionPremium-v2.0-premium.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v2.0 Premium" --notes "Luxury Persian-first auto caption editor with hybrid Persian transcription and word timing."
+            gh release create v2.1-offline-premium FarsiCaptionPremium-v2.1-offline-premium.apk --target "$GITHUB_SHA" --title "FarsiCaptionPremium v2.1 Offline Premium" --notes "Persian-first offline Auto Caption. No Backend URL, no App Token, improved Android safe-area handling, local Whisper Small model."
           fi
