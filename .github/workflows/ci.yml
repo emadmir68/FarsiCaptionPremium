@@ -73,6 +73,7 @@ jobs:
           name: regression-test-results
           path: |
             android/app/build/test-results/
+            android/app/build/reports/render-fixtures/
             native-build/Testing/Temporary/LastTest.log
       - name: Publish matching version
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
