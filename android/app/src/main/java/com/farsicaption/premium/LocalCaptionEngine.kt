@@ -282,9 +282,12 @@ class LocalCaptionEngine(private val context: Context) {
     }
 
     private fun preferredModelSpec(): ModelSpec {
-        // Fast mode is the default: Small is substantially lighter for on-device transcription.
-        // Turbo remains available as a fallback target for future explicit "Accurate" mode.
-        return SMALL_MODEL
+        // Ultra prioritizes recognition quality. Use Large-V3-Turbo on devices with
+        // enough physical RAM; keep Small only as the compatibility fallback.
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memoryInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        return if (memoryInfo.totalMem >= TURBO_MIN_RAM_BYTES) TURBO_MODEL else SMALL_MODEL
     }
 
     private fun modelFile(spec: ModelSpec): File {
