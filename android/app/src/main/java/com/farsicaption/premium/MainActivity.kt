@@ -789,7 +789,7 @@ private fun AutoCaptionPanel(
             Text("کلمات در هر کپشن: ${maxWords.roundToInt()}", color = TextPrimary, fontSize = 13.sp)
             Slider(value = maxWords, onValueChange = onMaxWords, valueRange = 2f..7f, steps = 4)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("fa" to "فارسی", "ar" to "عربی", "auto" to "خودکار").forEach { (code, label) ->
+                listOf("fa" to "فارسی", "ar" to "عربی").forEach { (code, label) ->
                     OutlinedButton(onClick = { speechLanguage = code }) {
                         Text(if (speechLanguage == code) "✓ $label" else label)
                     }
