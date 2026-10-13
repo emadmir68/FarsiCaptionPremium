@@ -70,8 +70,7 @@ object PersianTextNormalizer {
             .replace('ك', 'ک')
             .replace('ة', 'ه')
             .replace('ۀ', 'ه')
-            .replace('ؤ', 'و')
-            .replace(Regex("""[آأإٱ]"""), "ا")
+            .replace(Regex("""[أإٱ]"""), "ا")
             .replace("ـ", "")
             .replace(Regex("""[\u064B-\u065F\u0670]"""), "")
             .replace(Regex("""[\u200E\u200F\u202A-\u202E\u2066-\u2069]"""), "")
@@ -92,7 +91,8 @@ object PersianTextNormalizer {
 
         combined.forEach { (wrong, right) ->
             if (wrong.isNotBlank() && wrong != right) {
-                text = text.replace(wrong, right)
+                val pattern = Regex("""(?<![\p{L}\p{N}\u200C])""" + Regex.escape(wrong) + """(?![\p{L}\p{N}\u200C])""")
+                text = text.replace(pattern) { right }
             }
         }
 
