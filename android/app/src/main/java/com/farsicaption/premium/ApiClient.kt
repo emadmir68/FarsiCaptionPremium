@@ -32,6 +32,7 @@ data class TranscriptionResult(
     val fullText: String,
     val duration: Double,
     val captions: List<CaptionItem>,
+    val engineLabel: String = "",
 )
 
 class ApiClient(private val context: Context) {

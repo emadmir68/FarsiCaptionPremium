@@ -26,6 +26,9 @@ class LocalCaptionEngine(private val context: Context) {
         private val TURBO_MODEL = ModelSpec("ggml-large-v3-turbo.bin",
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
             "Whisper Large-V3-Turbo", 1624555275L, "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69", "~1.51GB", 128, 4)
+        private val COMPACT_MODEL = ModelSpec("ggml-large-v3-turbo-q5_0.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+            "Whisper Turbo Q5", 574041195L, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2", "~548MB", 128, 4)
         private val VAD_MODEL = ModelSpec("ggml-silero-v5.1.2.bin",
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
             "Silero VAD", 885098L, "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf", "~865KB")
@@ -42,17 +45,19 @@ class LocalCaptionEngine(private val context: Context) {
         synchronized(modelLock) { if (nativeHandle != 0L) NativeWhisper.cancel(nativeHandle) }
     }
     private fun checkCancelled() { if (cancelled.get()) throw CancellationException("لغو شد") }
-    suspend fun transcribe(uri: Uri, maxWords: Int, language: String = "fa", onStatus: (String) -> Unit,
+    suspend fun transcribe(uri: Uri, maxWords: Int, language: String = "fa", mode: String = "quality", onStatus: (String) -> Unit,
         onModelProgress: (Int) -> Unit = {}): TranscriptionResult = withContext(Dispatchers.IO) {
         checkCancelled()
-        val preferred = preferredModelSpec()
+        val preferred = preferredModelSpec(mode)
+        var selected = preferred
         val initial = try { ensureModel(preferred, onStatus, onModelProgress); preferred }
         catch (e: Exception) {
             checkCancelled()
-            if (preferred == SMALL_MODEL) throw e
-            onStatus("دانلود Turbo کامل نشد؛ استفاده از Small…")
-            ensureModel(SMALL_MODEL, onStatus, onModelProgress); SMALL_MODEL
+            if (preferred != TURBO_MODEL) throw e
+            onStatus("دانلود مدل کامل نشد؛ دریافت نسخهٔ کم‌حجم Turbo…")
+            ensureModel(COMPACT_MODEL, onStatus, onModelProgress); COMPACT_MODEL
         }
+        selected = initial
         val vad = ensureModel(VAD_MODEL, onStatus, onModelProgress)
         onStatus("آماده‌سازی صدای اصلی با نرخ ۱۶ کیلوهرتز…")
         val video = File.createTempFile("source-", ".mp4", context.cacheDir)
@@ -62,10 +67,11 @@ class LocalCaptionEngine(private val context: Context) {
             val raw = try { decode(initial, audio, vad, language, onStatus) }
             catch (e: Exception) {
                 checkCancelled()
-                if (initial == SMALL_MODEL) throw e
-                onStatus("اجرای Turbo ناموفق بود؛ استفاده از Small…")
-                ensureModel(SMALL_MODEL, onStatus, onModelProgress)
-                decode(SMALL_MODEL, audio, vad, language, onStatus)
+                if (initial != TURBO_MODEL) throw e
+                onStatus("حافظه برای مدل کامل کافی نبود یا اجرا ناموفق بود؛ اجرای Turbo کم‌حجم…")
+                ensureModel(COMPACT_MODEL, onStatus, onModelProgress)
+                selected = COMPACT_MODEL
+                decode(COMPACT_MODEL, audio, vad, language, onStatus)
             }
             checkCancelled()
             val root = JSONObject(raw)
@@ -81,7 +87,7 @@ class LocalCaptionEngine(private val context: Context) {
                     })
             }
             val captions = CaptionPipeline.build(segments, duration, maxWords, language)
-            TranscriptionResult(captions.joinToString(" ") { it.text }, duration, captions)
+            TranscriptionResult(captions.joinToString(" ") { it.text }, duration, captions, selected.label)
         } finally { video.delete(); audio.delete() }
     }
     private fun decode(spec: ModelSpec, audio: File, vad: File, language: String, onStatus: (String) -> Unit): String {
@@ -96,8 +102,8 @@ class LocalCaptionEngine(private val context: Context) {
         } finally { synchronized(modelLock) { NativeWhisper.release(handle); nativeHandle = 0L } }
     }
     private fun extractAudio(video: File, audio: File) {
-        // Preserve the signal until a representative A/B test justifies a filter.
-        val result = FFmpegKit.execute("-y -i ${q(video.absolutePath)} -map 0:a:0 -vn -ac 1 -ar 16000 -c:a pcm_s16le ${q(audio.absolutePath)}")
+        // Preserve stream timestamps, including delayed audio and timestamp gaps. No denoising or lexical correction.
+        val result = FFmpegKit.execute("-y -i ${q(video.absolutePath)} -map 0:a:0 -vn -ac 1 -ar 16000 -af aresample=async=1:first_pts=0 -c:a pcm_s16le ${q(audio.absolutePath)}")
         checkCancelled()
         if (!ReturnCode.isSuccess(result.returnCode) || audio.length() <= 44) error("صدای ویدیو قابل استخراج نیست")
     }
@@ -107,10 +113,14 @@ class LocalCaptionEngine(private val context: Context) {
         val preferred = preferredModelSpec()
         return modelFile(preferred).length() == preferred.size && modelFile(VAD_MODEL).length() == VAD_MODEL.size
     }
-    private fun preferredModelSpec(): ModelSpec {
+    private fun preferredModelSpec(mode: String = "quality"): ModelSpec {
         val info = ActivityManager.MemoryInfo()
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(info)
-        return if (ModelPolicy.useTurbo(info.totalMem, info.availMem, info.lowMemory)) TURBO_MODEL else SMALL_MODEL
+        return when (ModelPolicy.select(mode, info.totalMem, info.availMem, info.lowMemory)) {
+            ModelTier.TURBO -> TURBO_MODEL
+            ModelTier.TURBO_COMPACT -> COMPACT_MODEL
+            ModelTier.SMALL -> SMALL_MODEL
+        }
     }
     private fun modelFile(spec: ModelSpec) = File(File(context.filesDir, "models").apply { mkdirs() }, spec.name)
     private fun digest(file: File): String {
@@ -127,9 +137,9 @@ class LocalCaptionEngine(private val context: Context) {
         val verification = context.getSharedPreferences("model_verification_v1", Context.MODE_PRIVATE)
         val stamp = "${spec.sha256}:${target.length()}:${target.lastModified()}"
         if (target.length() == spec.size) {
-            if (verification.getString(spec.name, null) == stamp) return target
+            if (verification.getString(spec.name, null) == stamp) { progress(100); return target }
             status("بررسی سلامت ${spec.label}…")
-            if (digest(target) == spec.sha256) { verification.edit().putString(spec.name, stamp).apply(); return target }
+            if (digest(target) == spec.sha256) { verification.edit().putString(spec.name, stamp).apply(); progress(100); return target }
         }
         status("دانلود یک‌باره ${spec.label} (${spec.downloadLabel})…")
         val part = File(target.parentFile, "${spec.name}.part")
@@ -271,8 +281,8 @@ class LocalCaptionEngine(private val context: Context) {
         }
 
         val scale = frameHeight / 1920.0
-        val scaledFontSize = (fontSize.coerceIn(36, 82) * scale).toInt().coerceAtLeast(12)
-        val scaledMargin = (marginV.coerceIn(40, 420) * scale).toInt().coerceAtLeast(8)
+        val scaledFontSize = CaptionStyle.fontPixels(fontSize.toFloat(), frameHeight.toFloat()).toInt()
+        val scaledMargin = CaptionStyle.marginPixels(marginV.toFloat(), frameHeight.toFloat()).toInt()
         val scaledSideMargin = (60 * scale).toInt().coerceAtLeast(8)
         val scaledOutline = (outline * scale).toInt().coerceAtLeast(1)
         val scaledShadow = scale.toInt().coerceAtLeast(1)
@@ -281,7 +291,7 @@ class LocalCaptionEngine(private val context: Context) {
 ScriptType: v4.00+
 PlayResX: $frameWidth
 PlayResY: $frameHeight
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]

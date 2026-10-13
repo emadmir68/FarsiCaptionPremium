@@ -22,7 +22,7 @@ internal object CaptionPipeline {
             val aligned = words.isNotEmpty() && words.all { it.start.isFinite() && it.end.isFinite() && it.start >= s.start && it.end <= s.end && it.end > it.start } &&
                 words.zipWithNext().all { (a, b) -> a.end <= b.start } &&
                 SpeechLanguagePolicy.clean(words.joinToString(" ") { it.text }, language) == s.text
-            if (aligned) words.chunked(maxWords.coerceIn(2, 7)).forEach { chunk ->
+            if (aligned) wordGroups(words, maxWords.coerceIn(2, 7)).forEach { chunk ->
                 val text = SpeechLanguagePolicy.clean(chunk.joinToString(" ") { it.text }, language)
                 val a = maxOf(chunk.first().start, start, out.lastOrNull()?.end ?: 0.0)
                 val b = chunk.last().end
@@ -30,5 +30,23 @@ internal object CaptionPipeline {
             } else out += CaptionItem(s.text, start, s.end)
         }
         return out
+    }
+    private fun wordGroups(words: List<TimedWord>, limit: Int): List<List<TimedWord>> {
+        val phrases = mutableListOf<MutableList<TimedWord>>()
+        words.forEach { word ->
+            val phrase = phrases.lastOrNull()
+            if (phrase == null || word.start - phrase.last().end > 0.7) phrases += mutableListOf(word)
+            else phrase += word
+        }
+        return phrases.flatMap { phrase ->
+            val count = (phrase.size + limit - 1) / limit
+            val base = phrase.size / count
+            val remainder = phrase.size % count
+            var cursor = 0
+            (0 until count).map { i ->
+                val size = base + if (i < remainder) 1 else 0
+                phrase.subList(cursor, cursor + size).toList().also { cursor += size }
+            }
+        }
     }
 }

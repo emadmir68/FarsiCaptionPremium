@@ -27,6 +27,7 @@ class TranscriptionService : Service() {
         const val EXTRA_URI = "uri"
         const val EXTRA_MAX_WORDS = "max_words"
         const val EXTRA_LANGUAGE = "language"
+        const val EXTRA_MODE = "model_mode"
         const val EXTRA_JOB_ID = "job_id"
         const val KEY_JOB_ID = "job_id"
         const val KEY_URI = "source_uri"
@@ -62,6 +63,7 @@ class TranscriptionService : Service() {
         val uri = intent.getStringExtra(EXTRA_URI)?.let(Uri::parse) ?: return START_NOT_STICKY
         val maxWords = intent.getIntExtra(EXTRA_MAX_WORDS, 5)
         val language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "fa"
+        val mode = intent.getStringExtra(EXTRA_MODE) ?: "quality"
         val jobId = intent.getStringExtra(EXTRA_JOB_ID) ?: return START_NOT_STICKY
         val identity = JobIdentity(jobId, uri.toString())
         if (!TranscriptionJobStore.matches(this, identity)) return START_NOT_STICKY
@@ -79,14 +81,14 @@ class TranscriptionService : Service() {
                     val engine = LocalCaptionEngine(applicationContext)
                     activeEngine = engine
                     val result = try {
-                        engine.transcribe(uri, maxWords, language, onStatus = { status ->
+                        engine.transcribe(uri, maxWords, language, mode, onStatus = { status ->
                             if (TranscriptionJobStore.update(applicationContext, identity, STATE_RUNNING, status)) {
                                 getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
                             }
                         }, onModelProgress = { progress -> TranscriptionJobStore.progress(applicationContext, identity, progress) })
                     } finally { if (activeEngine === engine) activeEngine = null }
                     val array = CaptionJson.encode(result.captions)
-                    val message = if (result.captions.isEmpty()) "گفتاری پیدا نشد؛ زیرنویسی اضافه نشد" else "زیرنویس آماده شد • ${result.captions.size} قطعه"
+                    val message = (if (result.captions.isEmpty()) "گفتاری پیدا نشد؛ زیرنویسی اضافه نشد" else "زیرنویس آماده شد • ${result.captions.size} قطعه") + " • ${result.engineLabel}"
                     if (TranscriptionJobStore.update(applicationContext, identity, STATE_DONE, message, array.toString())) {
                         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(message))
                     }

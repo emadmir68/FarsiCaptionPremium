@@ -1,12 +1,12 @@
-Persian-first offline ASR repair, version 3.3.1-ultra (43), arm64-v8a / Android 8+.
+Version 3.3.2-ultra (44), arm64-v8a / Android 8+. Follow-up to a user-supplied source clip and rendered result.
 
-- Owned JNI bridge with pinned whisper.cpp v1.7.6; checks Turbo 128-mel / 4-decoder architecture, explicit Persian/Arabic language and beam search configuration.
-- Silero VAD with original-timeline offsets for both segments and words; complete final PCM block retained. Small remains the announced fallback when RAM is insufficient.
-- Remove speculative vocabulary corrections and cross-project learning. Persian normalization never runs on Arabic.
-- Preserve genuine repetitions and silence gaps. One-time job + URI delivery prevents stale captions and polling from replacing manual edits.
-- Keep applicationId, existing signing certificate, project edits and style settings. Bundle Vazirmatn for exported Persian captions.
-- Version, tag, APK filename and metadata are checked together; existing release files are never overwritten.
+- Quality mode never automatically falls back to Small. It uses full Turbo with enough memory, otherwise verified Turbo Q5 (~548 MB download). Small is available only through the explicit lightweight choice.
+- Preserve the model name in the completed job status. A downloaded model or "ready" label is not an accuracy guarantee.
+- Preserve delayed audio and timestamp gaps during extraction. Real ffmpeg regression fixtures cover zero offset, delayed audio and an internal gap.
+- Use the video aspect ratio in the preview, the bundled Persian font, and the same relative font size / bottom margin in preview and export. Extend the font control through 110 and provide a readable-size shortcut without erasing saved preferences.
+- Balance aligned caption groups instead of splitting six words into five plus one, preserve pauses, and enable line wrapping in export.
+- applicationId, update-signing certificate, project data and previous releases remain unchanged.
 
-Validation: native contract tests, 38 Kotlin regression tests, Android release build and upgrade-certificate check are required by CI. See docs/ASR-AUDIT.md for the limited real-audio experiment and reproducible scoring.
+Important result: recognition errors were reproduced on the supplied real clip. Turbo, Turbo Q5 and the full Large-v3 comparison did NOT establish accurate recognition of this sample. An experimental Persian fine-tune omitted most speech and was rejected. This release fixes demonstrated selection, timing and presentation defects; it is NOT a claim that the sample's ASR is solved. No dictionary guesses or replacement transcript is injected.
 
-This is a prerelease: the user's failing colloquial video was not supplied. Physical Android performance, actual JNI inference on a phone, diverse music/noise, Arabic acoustic accuracy and rendered-video QA remain unverified. A successful build alone does not establish transcription quality. First use downloads the selected model and VAD; transcription then runs offline without a backend or paid API.
+CI gates: native contract, 50 Kotlin unit/regression tests, real ffmpeg timeline tests, release APK build, application/version checks and signing-certificate match. Physical Android inference/thermal performance and end-to-end device lifecycle remain untested. User media and recognition text are not published in the repository.

@@ -21,6 +21,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,6 +68,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -76,6 +78,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -157,7 +166,7 @@ private fun PremiumCaptionApp() {
     val editorSettings = remember { context.getSharedPreferences("editor_settings", Context.MODE_PRIVATE) }
     var maxWords by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("maxWords", 5f)) }
     var preset by rememberSaveable { mutableStateOf(editorSettings.getString("preset", "luxury") ?: "luxury") }
-    var fontSize by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("fontSize", 56f)) }
+    var fontSize by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("fontSize", CaptionStyle.DEFAULT_FONT)) }
     var marginV by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("marginV", 120f)) }
     var textColorKey by rememberSaveable { mutableStateOf(editorSettings.getString("textColor", "cream") ?: "cream") }
     var backgroundKey by rememberSaveable { mutableStateOf(editorSettings.getString("background", "none") ?: "none") }
@@ -282,7 +291,7 @@ private fun PremiumCaptionApp() {
                             }
                             saveProjectState(context, sourceUri, captions, activeJobId, appliedJobId)
                         },
-                        onTranscribe = { language ->
+                        onTranscribe = { language, mode ->
                             val uri = sourceUri
                             if (uri != null && !isTranscribing) {
                                 isTranscribing = true
@@ -297,6 +306,7 @@ private fun PremiumCaptionApp() {
                                     putExtra(TranscriptionService.EXTRA_URI, uri.toString())
                                     putExtra(TranscriptionService.EXTRA_MAX_WORDS, maxWords.roundToInt())
                                     putExtra(TranscriptionService.EXTRA_LANGUAGE, language)
+                                    putExtra(TranscriptionService.EXTRA_MODE, mode)
                                     putExtra(TranscriptionService.EXTRA_JOB_ID, jobId)
                                 }
                                 runCatching { ContextCompat.startForegroundService(context, serviceIntent) }.onFailure {
@@ -446,7 +456,7 @@ private fun HomeScreen(
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("Premium Engine • Adaptive Accuracy", color = GoldSoft, fontWeight = FontWeight.Bold)
-                    EngineRow("01", engineLabel, "انتخاب خودکار بالاترین مدل پایدار • دانلود $engineDownload")
+                    EngineRow("01", engineLabel, "مدل پیش‌فرض با توجه به حافظه • دانلود $engineDownload")
                     EngineRow("02", "Persian Clean Audio", "تشخیص بخش‌های گفتار با حفظ صدای اصلی")
                     EngineRow("03", "Project Editing", "ویرایش‌های دستی برای همین پروژه ذخیره می‌شوند")
                     EngineRow("04", "Luxury Editor", "Drag کپشن، رنگ، پس‌زمینه، اندازه و استایل زنده")
@@ -540,7 +550,7 @@ private fun EditorScreen(
     onBackground: (String) -> Unit,
     onSelectCaption: (Int) -> Unit,
     onEditCaption: (Int, String) -> Unit,
-    onTranscribe: (String) -> Unit,
+    onTranscribe: (String, String) -> Unit,
     onExport: () -> Unit,
 ) {
     var tab by remember { mutableStateOf("text") }
@@ -708,8 +718,20 @@ private fun VideoStage(
         }
     }
 
+    var videoRatio by remember(uri) { mutableFloatStateOf(9f / 16f) }
+    val density = LocalDensity.current
+    val currentMargin by rememberUpdatedState(marginV)
+    val captionFont = remember {
+        FontFamily(androidx.compose.ui.text.font.Typeface(android.graphics.Typeface.createFromAsset(context.assets, "fonts/Vazirmatn-Regular.ttf")))
+    }
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(size: VideoSize) {
+                if (size.width > 0 && size.height > 0) videoRatio = size.width * size.pixelWidthHeightRatio / size.height
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
     }
 
     LaunchedEffect(player) {
@@ -727,50 +749,33 @@ private fun VideoStage(
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .aspectRatio(9f / 14f),
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().background(Color.Black).aspectRatio(videoRatio.coerceIn(0.2f, 5f)),
     ) {
+        val previewHeightPx = with(density) { maxHeight.toPx() }
+        val previewFontSize = with(density) { CaptionStyle.fontPixels(fontSize, previewHeightPx).toSp() }
+        val previewMargin = with(density) { CaptionStyle.marginPixels(marginV, previewHeightPx).toDp() }
         AndroidView(
-            factory = {
-                PlayerView(it).apply {
-                    this.player = player
-                    useController = true
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                }
-            },
+            factory = { PlayerView(it).apply { this.player = player; useController = true; setShutterBackgroundColor(android.graphics.Color.BLACK) } },
             modifier = Modifier.fillMaxSize(),
         )
-
-        if (captionText.isNotBlank()) {
-            val styleColor = captionTextColor(textColorKey)
-            Surface(
-                color = captionBackgroundColor(backgroundKey),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .pointerInput(marginV) {
-                        detectDragGestures { _, dragAmount ->
-                            onMarginV(
-                                (marginV - dragAmount.y * 1.25f)
-                                    .coerceIn(50f, 300f)
-                            )
-                        }
+        if (captionText.isNotBlank()) Surface(
+            color = captionBackgroundColor(backgroundKey), shape = RoundedCornerShape(4.dp),
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .padding(bottom = previewMargin, start = 12.dp, end = 12.dp)
+                .pointerInput(previewHeightPx) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        onMarginV(CaptionStyle.dragMargin(currentMargin, drag.y, previewHeightPx))
                     }
-                    .padding(bottom = (34 + marginV / 6f).dp, start = 24.dp, end = 24.dp),
-            ) {
-                Text(
-                    captionText,
-                    color = styleColor,
-                    fontSize = (fontSize / 3f).coerceIn(15f, 26f).sp,
-                    lineHeight = (fontSize / 2.4f).coerceIn(20f, 32f).sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = if (preset == "glass") 7.dp else 2.dp),
-                )
-            }
+                },
+        ) {
+            Text(captionText, color = captionTextColor(textColorKey), fontFamily = captionFont,
+                fontSize = previewFontSize, lineHeight = previewFontSize * 1.25f,
+                fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                style = TextStyle(shadow = Shadow(Color.Black, Offset(1f, 1f), 2f)),
+                modifier = Modifier.padding(horizontal = 3.dp),
+            )
         }
     }
 }
@@ -779,9 +784,14 @@ private fun VideoStage(
 private fun AutoCaptionPanel(
     maxWords: Float,
     onMaxWords: (Float) -> Unit,
-    onTranscribe: (String) -> Unit,
+    onTranscribe: (String, String) -> Unit,
 ) {
-    var speechLanguage by remember { mutableStateOf("fa") }
+    val preferences = LocalContext.current.getSharedPreferences("editor_settings", Context.MODE_PRIVATE)
+    var speechLanguage by rememberSaveable { mutableStateOf(preferences.getString("speechLanguage", "fa") ?: "fa") }
+    var mode by rememberSaveable { mutableStateOf(preferences.getString("modelMode", "quality") ?: "quality") }
+    LaunchedEffect(speechLanguage, mode) {
+        preferences.edit().putString("speechLanguage", speechLanguage).putString("modelMode", mode).apply()
+    }
     Card(
         colors = CardDefaults.cardColors(containerColor = Panel),
         shape = RoundedCornerShape(24.dp),
@@ -793,7 +803,7 @@ private fun AutoCaptionPanel(
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Auto Caption فارسی", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
             Text(
-                "نسخه Ultra ابتدا صدا را برای گفتار بهینه می‌کند و روی گوشی‌های قوی از Large‑V3‑Turbo استفاده می‌کند؛ در صورت نیاز خودکار به Small برمی‌گردد. بدون Backend و بدون App Token.",
+                "حالت کیفیت از Turbo استفاده می‌کند؛ با حافظهٔ کمتر نسخهٔ کم‌حجم آن اجرا می‌شود. Small فقط در حالت سبک انتخاب می‌شود. همهٔ مدل‌ها پس از دانلود، آفلاین کار می‌کنند.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
@@ -807,13 +817,19 @@ private fun AutoCaptionPanel(
                     }
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک").forEach { (key, label) ->
+                    OutlinedButton(onClick = { mode = key }) { Text(if (mode == key) "✓ $label" else label) }
+                }
+            }
+            if (mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = GoldSoft, fontSize = 12.sp)
             Button(
-                onClick = { onTranscribe(speechLanguage) },
+                onClick = { onTranscribe(speechLanguage, mode) },
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
                 shape = RoundedCornerShape(17.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("ساخت زیرنویس فارسی", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
+                Text(if (speechLanguage == "ar") "ساخت زیرنویس عربی" else "ساخت زیرنویس فارسی", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
             }
         }
     }
@@ -969,8 +985,9 @@ private fun StyleEditor(
                 }
             }
         }
+        TextButton(onClick = { onFontSize(CaptionStyle.DEFAULT_FONT) }) { Text("اندازهٔ خوانا برای موبایل", color = GoldSoft) }
         Text("اندازه متن: ${fontSize.roundToInt()}", color = TextMuted, fontSize = 12.sp)
-        Slider(value = fontSize, onValueChange = onFontSize, valueRange = 30f..90f)
+        Slider(value = fontSize, onValueChange = onFontSize, valueRange = CaptionStyle.MIN_FONT..CaptionStyle.MAX_FONT)
 
         Text("رنگ متن", color = TextPrimary, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
