@@ -71,7 +71,7 @@ class LocalCaptionEngine(private val context: Context) {
             ensureModel(SMALL_MODEL, onStatus, onModelProgress)
         }
 
-        onStatus("در حال بهینه‌سازی صدا برای تشخیص فارسی…")
+        onStatus("در حال آماده‌سازی صدا برای تشخیص گفتار…")
         val video = copyUriToCache(uri, "source-${System.currentTimeMillis()}.mp4")
         val audio = File(context.cacheDir, "speech-${System.currentTimeMillis()}.wav")
 
@@ -101,7 +101,7 @@ class LocalCaptionEngine(private val context: Context) {
             }
 
             if (captions.isEmpty()) {
-                error("گفتار فارسی قابل استفاده‌ای پیدا نشد")
+                error("گفتار قابل استفاده‌ای پیدا نشد")
             }
 
             TranscriptionResult(
@@ -132,7 +132,7 @@ class LocalCaptionEngine(private val context: Context) {
                 model,
                 audio.absolutePath,
                 WhisperConfig(
-                    language = language.takeIf { it in setOf("fa", "ar") },
+                    language = if (language == "ar") "ar" else "fa",
                     threads = threads,
                     printTimestamps = true,
                     maxSegmentLength = 80,
