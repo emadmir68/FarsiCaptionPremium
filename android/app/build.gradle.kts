@@ -14,8 +14,8 @@ android {
         applicationId = "com.farsicaption.premium"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "3.2.3-stable-alpha"
+        versionCode = 36
+        versionName = "3.2.4-stable-alpha"
     }
 
     signingConfigs {
