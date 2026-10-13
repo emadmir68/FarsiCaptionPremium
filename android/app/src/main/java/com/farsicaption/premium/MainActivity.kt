@@ -273,7 +273,7 @@ private fun PremiumCaptionApp() {
                                 list[index] = old.copy(text = text, words = emptyList())
                             }
                         },
-                        onTranscribe = {
+                        onTranscribe = { language ->
                             val uri = sourceUri
                             if (uri != null && !isTranscribing) {
                                 isTranscribing = true
@@ -282,6 +282,7 @@ private fun PremiumCaptionApp() {
                                     action = TranscriptionService.ACTION_START
                                     putExtra(TranscriptionService.EXTRA_URI, uri.toString())
                                     putExtra(TranscriptionService.EXTRA_MAX_WORDS, maxWords.roundToInt())
+                                    putExtra(TranscriptionService.EXTRA_LANGUAGE, language)
                                 }
                                 ContextCompat.startForegroundService(context, serviceIntent)
                             }
@@ -520,7 +521,7 @@ private fun EditorScreen(
     onBackground: (String) -> Unit,
     onSelectCaption: (Int) -> Unit,
     onEditCaption: (Int, String) -> Unit,
-    onTranscribe: () -> Unit,
+    onTranscribe: (String) -> Unit,
     onExport: () -> Unit,
 ) {
     var tab by remember { mutableStateOf("text") }
@@ -759,8 +760,9 @@ private fun VideoStage(
 private fun AutoCaptionPanel(
     maxWords: Float,
     onMaxWords: (Float) -> Unit,
-    onTranscribe: () -> Unit,
+    onTranscribe: (String) -> Unit,
 ) {
+    var speechLanguage by remember { mutableStateOf("fa") }
     Card(
         colors = CardDefaults.cardColors(containerColor = Panel),
         shape = RoundedCornerShape(24.dp),
@@ -779,8 +781,15 @@ private fun AutoCaptionPanel(
             )
             Text("کلمات در هر کپشن: ${maxWords.roundToInt()}", color = TextPrimary, fontSize = 13.sp)
             Slider(value = maxWords, onValueChange = onMaxWords, valueRange = 2f..7f, steps = 4)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("fa" to "فارسی", "ar" to "عربی", "auto" to "خودکار").forEach { (code, label) ->
+                    OutlinedButton(onClick = { speechLanguage = code }) {
+                        Text(if (speechLanguage == code) "✓ $label" else label)
+                    }
+                }
+            }
             Button(
-                onClick = onTranscribe,
+                onClick = { onTranscribe(speechLanguage) },
                 colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
                 shape = RoundedCornerShape(17.dp),
                 modifier = Modifier.fillMaxWidth(),
