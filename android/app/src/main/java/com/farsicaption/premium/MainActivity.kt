@@ -199,12 +199,18 @@ private fun PremiumCaptionApp() {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
+            // New media is a hard project boundary. Clear both the editor state and
+            // any finished/running transcription payload from the previous video.
+            context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
+                .edit().clear().commit()
+            context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
+                .edit().remove("active_project").commit()
             sourceUri = uri
             captions = emptyList()
             saveProjectState(context, uri, emptyList())
             selectedIndex = 0
             currentPosition = 0.0
-            status = "ویدیو آماده است"
+            status = "ویدیو جدید آماده است؛ برای ساخت زیرنویس، تشخیص گفتار را اجرا کن"
             runCatching {
                 context.contentResolver.takePersistableUriPermission(
                     uri,
