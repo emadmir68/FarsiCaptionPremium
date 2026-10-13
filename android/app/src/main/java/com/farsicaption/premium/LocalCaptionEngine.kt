@@ -132,7 +132,7 @@ class LocalCaptionEngine(private val context: Context) {
                 model,
                 audio.absolutePath,
                 WhisperConfig(
-                    language = language.takeIf { it in setOf("fa", "ar", "auto") } ?: "fa",
+                    language = language.takeIf { it in setOf("fa", "ar") },
                     threads = threads,
                     printTimestamps = true,
                     maxSegmentLength = 80,
@@ -445,7 +445,7 @@ class LocalCaptionEngine(private val context: Context) {
             .replace(Regex("\\((music|موسیقی|silence|آهنگ|applause|تشویق)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
             .trim()
 
-        val text = if (language == "ar" || (language == "auto" && !Regex("[پچژگکیی]").containsMatchIn(stripped))) stripped else PersianTextNormalizer.normalize(stripped, correctionStore.all())
+        val text = if (language == "ar") stripped else PersianTextNormalizer.normalize(stripped, correctionStore.all())
         val normalized = text.lowercase().replace("[", "").replace("]", "").trim()
 
         if (normalized in setOf("music", "موسیقی", "آهنگ", "silence", "applause", "تشویق")) {
