@@ -184,8 +184,8 @@ class LocalCaptionEngine(private val context: Context) {
     }
 
     internal fun incrementalText(previous: String, current: String): String {
-        val prevTokens = previous.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
-        val currentTokens = current.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        val prevTokens = previous.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }
+        val currentTokens = current.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }
         if (prevTokens.isEmpty() || currentTokens.size <= prevTokens.size) return current
 
         fun key(token: String) = token
@@ -358,7 +358,7 @@ class LocalCaptionEngine(private val context: Context) {
         end: Double,
         maxWords: Int,
     ): List<CaptionItem> {
-        val tokens = text.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val tokens = text.split(Regex("\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
         val chunks = smartChunks(tokens, maxWords)
