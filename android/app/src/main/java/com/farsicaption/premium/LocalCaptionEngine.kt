@@ -123,7 +123,7 @@ class LocalCaptionEngine(private val context: Context) {
 
         val model = Whisper.loadModel(context, modelFile.absolutePath)
         return try {
-            val threads = Runtime.getRuntime().availableProcessors().coerceIn(4, 8)
+            val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
             val result = Whisper.transcribe(
                 model,
                 audio.absolutePath,
@@ -131,6 +131,7 @@ class LocalCaptionEngine(private val context: Context) {
                     language = "fa",
                     threads = threads,
                     printTimestamps = true,
+                    maxSegmentLength = 80,
                 ),
             )
 
@@ -144,10 +145,10 @@ class LocalCaptionEngine(private val context: Context) {
                 val incremental = incrementalText(previousSegmentText, cleaned)
                 val rawStart = segment.startMs.toDouble() / 1000.0
                 val end = max(rawStart + 0.18, segment.endMs.toDouble() / 1000.0)
+                if (end <= previousSegmentEnd && rawStart < previousSegmentEnd) return@forEach
 
                 if (incremental.isNotBlank()) {
-                    val removedPrefix = incremental != cleaned
-                    val start = if (removedPrefix) max(rawStart, previousSegmentEnd) else rawStart
+                    val start = max(rawStart, previousSegmentEnd)
                     if (end > start) {
                         captions += splitSegment(incremental, start, end, maxWords.coerceIn(2, 7))
                     }
