@@ -507,25 +507,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         val events = mutableListOf<String>()
 
         captions.forEach { caption ->
-            if (caption.words.isNotEmpty()) {
-                caption.words.forEachIndexed { index, word ->
-                    val start = max(caption.start, word.start)
-                    val end = if (index == caption.words.lastIndex) {
-                        caption.end
-                    } else {
-                        minOf(
-                            caption.end,
-                            max(start + 0.05, caption.words[index + 1].start - 0.01),
-                        )
-                    }
-                    val progressiveText = caption.words
-                        .take(index + 1)
-                        .joinToString(" ") { it.text }
-                    events += assDialogue(start, end, progressiveText)
-                }
-            } else {
-                events += assDialogue(caption.start, caption.end, caption.text)
-            }
+            events += assDialogue(caption.start, caption.end, caption.text)
         }
 
         return header + events.joinToString("\n") + "\n"
