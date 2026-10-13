@@ -55,4 +55,42 @@ class PersianTextNormalizerTest {
         )
     }
 
+
+    @Test
+    fun preservesPersianDistinctLetters() {
+        assertEquals(
+            "آموزش آزاد و مؤثر",
+            PersianTextNormalizer.normalize("آموزش آزاد و مؤثر"),
+        )
+    }
+
+    @Test
+    fun correctionsDoNotModifySubstringsOfWords() {
+        assertEquals(
+            "کتابخانه کتاب",
+            PersianTextNormalizer.normalize(
+                "کتابخانه کتاب",
+                mapOf("کتاب" to "دفتر"),
+            ),
+        )
+    }
+
+    @Test
+    fun correctionsRespectPersianPunctuation() {
+        assertEquals(
+            "«درست»؛ درست!",
+            PersianTextNormalizer.normalize(
+                "«غلط»؛ غلط!",
+                mapOf("غلط" to "درست"),
+            ),
+        )
+    }
+
+    @Test
+    fun preservesHalfSpaceAndLatinText() {
+        assertEquals(
+            "می‌روم API",
+            PersianTextNormalizer.normalize("می‌روم API"),
+        )
+    }
 }
