@@ -56,17 +56,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FarsiCaptionPremium-v3.2-stable-alpha-apk
+          name: FarsiCaptionPremium-v3.2.7-stable-alpha-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish Premium v3.2 APK
+      - name: Publish Premium v3.2.7 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.2-stable-alpha.apk
-          if gh release view v3.2-stable-alpha >/dev/null 2>&1; then
-            gh release upload v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk --clobber
+          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.2.7-stable-alpha.apk
+          if gh release view v3.2.7-stable-alpha >/dev/null 2>&1; then
+            gh release upload v3.2.7-stable-alpha FarsiCaptionPremium-v3.2.7-stable-alpha.apk --clobber
           else
-            gh release create v3.2-stable-alpha FarsiCaptionPremium-v3.2-stable-alpha.apk               --target "$GITHUB_SHA"               --title "FarsiCaptionPremium v3.2 Stable Alpha"               --notes "Stable-signing alpha baseline for in-place future updates. Includes adaptive Persian ASR, Large-V3-Turbo on capable devices with Small fallback, speech-focused audio enhancement, self-learning Persian corrections, Persian normalization, improved word timing, progressive captions, direct drag positioning, and premium styling."
+            gh release create v3.2.7-stable-alpha FarsiCaptionPremium-v3.2.7-stable-alpha.apk               --target "$GITHUB_SHA"               --title "FarsiCaptionPremium v3.2.7 Stable Alpha"               --notes "Language selector (Persian, Arabic, Auto) and faster lightweight audio preprocessing. Keeps app ID and existing project data."
           fi
