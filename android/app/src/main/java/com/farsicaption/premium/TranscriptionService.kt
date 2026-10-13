@@ -22,6 +22,7 @@ class TranscriptionService : Service() {
         const val ACTION_START = "com.farsicaption.premium.START_TRANSCRIPTION"
         const val EXTRA_URI = "uri"
         const val EXTRA_MAX_WORDS = "max_words"
+        const val EXTRA_LANGUAGE = "language"
         const val PREFS = "transcription_job"
         const val KEY_STATE = "state"
         const val KEY_STATUS = "status"
@@ -47,6 +48,7 @@ class TranscriptionService : Service() {
         if (intent?.action != ACTION_START) return START_NOT_STICKY
         val uri = intent.getStringExtra(EXTRA_URI)?.let(Uri::parse) ?: return START_NOT_STICKY
         val maxWords = intent.getIntExtra(EXTRA_MAX_WORDS, 5)
+        val language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "fa"
         updateState(STATE_RUNNING, "در حال آماده‌سازی تشخیص گفتار…")
         startForeground(NOTIFICATION_ID, notification("در حال آماده‌سازی…"))
 
@@ -55,6 +57,7 @@ class TranscriptionService : Service() {
                 LocalCaptionEngine(applicationContext).transcribe(
                     uri = uri,
                     maxWords = maxWords,
+                    language = language,
                     onStatus = { status ->
                         updateState(STATE_RUNNING, status)
                         getSystemService(NotificationManager::class.java)
