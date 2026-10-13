@@ -90,6 +90,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.math.roundToInt
 
 private val Ink = Color(0xFF08090D)
@@ -109,14 +111,46 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun saveProjectState(context: Context, uri: Uri?, captions: List<CaptionItem>) {
+    val root = JSONObject().put("sourceUri", uri?.toString().orEmpty())
+    val array = JSONArray()
+    captions.forEach { caption ->
+        array.put(JSONObject()
+            .put("text", caption.text)
+            .put("start", caption.start)
+            .put("end", caption.end))
+    }
+    root.put("captions", array)
+    context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
+        .edit().putString("active_project", root.toString()).apply()
+}
+
+private fun restoreProjectState(context: Context): Pair<Uri?, List<CaptionItem>> {
+    val raw = context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
+        .getString("active_project", null) ?: return null to emptyList()
+    return runCatching {
+        val root = JSONObject(raw)
+        val uri = root.optString("sourceUri").takeIf { it.isNotBlank() }?.let(Uri::parse)
+        val array = root.optJSONArray("captions") ?: JSONArray()
+        val captions = buildList {
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                add(CaptionItem(item.optString("text"), item.optDouble("start"), item.optDouble("end")))
+            }
+        }
+        uri to captions
+    }.getOrElse { null to emptyList() }
+}
+
 @Composable
 private fun PremiumCaptionApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val engine = remember { LocalCaptionEngine(context) }
 
-    var sourceUri by remember { mutableStateOf<Uri?>(null) }
-    var captions by remember { mutableStateOf<List<CaptionItem>>(emptyList()) }
+    val restored = remember { restoreProjectState(context) }
+    var sourceUri by remember { mutableStateOf(restored.first) }
+    var captions by remember { mutableStateOf(restored.second) }
     var selectedIndex by remember { mutableIntStateOf(0) }
     var currentPosition by remember { mutableDoubleStateOf(0.0) }
     var seekTarget by remember { mutableStateOf<Double?>(null) }
@@ -142,6 +176,7 @@ private fun PremiumCaptionApp() {
         if (uri != null) {
             sourceUri = uri
             captions = emptyList()
+            saveProjectState(context, uri, emptyList())
             selectedIndex = 0
             currentPosition = 0.0
             status = "ویدیو آماده است"
@@ -228,6 +263,7 @@ private fun PremiumCaptionApp() {
                                         )
                                     }.onSuccess { result ->
                                         captions = result.captions
+                                        saveProjectState(context, uri, result.captions)
                                         selectedIndex = 0
                                         status = "زیرنویس آماده شد • ${result.captions.size} قطعه"
                                     }.onFailure { e ->
