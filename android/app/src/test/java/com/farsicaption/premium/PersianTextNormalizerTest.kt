@@ -67,7 +67,7 @@ class PersianTextNormalizerTest {
     @Test
     fun correctionsDoNotModifySubstringsOfWords() {
         assertEquals(
-            "کتابخانه کتاب",
+            "کتابخانه دفتر",
             PersianTextNormalizer.normalize(
                 "کتابخانه کتاب",
                 mapOf("کتاب" to "دفتر"),
