@@ -150,9 +150,9 @@ private fun PremiumCaptionApp() {
     val scope = rememberCoroutineScope()
     val engine = remember { LocalCaptionEngine(context) }
 
-    val restored = remember { restoreProjectState(context) }
-    var sourceUri by remember { mutableStateOf(restored.first) }
-    var captions by remember { mutableStateOf(restored.second) }
+    // A fresh app launch always starts at Home. Persisted projects are never forced open.
+    var sourceUri by remember { mutableStateOf<Uri?>(null) }
+    var captions by remember { mutableStateOf<List<CaptionItem>>(emptyList()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
     var currentPosition by remember { mutableDoubleStateOf(0.0) }
     var seekTarget by remember { mutableStateOf<Double?>(null) }
@@ -255,6 +255,7 @@ private fun PremiumCaptionApp() {
                         onBack = {
                             sourceUri = null
                             captions = emptyList()
+                            context.getSharedPreferences("project_state", Context.MODE_PRIVATE).edit().remove("active_project").apply()
                         },
                         onNewVideo = { picker.launch(arrayOf("video/*")) },
                         onMaxWords = { maxWords = it },
