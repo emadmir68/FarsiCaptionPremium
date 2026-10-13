@@ -3,6 +3,7 @@ package com.farsicaption.premium
 import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
 import dev.ffmpegkit.whisper.Whisper
@@ -230,8 +231,11 @@ class LocalCaptionEngine(private val context: Context) {
         val video = copyUriToCache(uri, "export-source-${System.currentTimeMillis()}.mp4")
         val ass = File(context.cacheDir, "captions-${System.currentTimeMillis()}.ass")
         val output = File(context.cacheDir, "FarsiCaption-${System.currentTimeMillis()}.mp4")
+        val frameSize = readVideoFrameSize(video)
         ass.writeText(
             buildAss(
+                frameWidth = frameSize.first,
+                frameHeight = frameSize.second,
                 captions = captions,
                 preset = preset,
                 fontSize = fontSize,
@@ -452,7 +456,26 @@ class LocalCaptionEngine(private val context: Context) {
         correctionStore.learn(original, edited)
     }
 
+    private fun readVideoFrameSize(video: File): Pair<Int, Int> {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(video.absolutePath)
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                ?.toIntOrNull() ?: error("عرض ویدئو مشخص نیست")
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                ?.toIntOrNull() ?: error("ارتفاع ویدئو مشخص نیست")
+            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                ?.toIntOrNull() ?: 0
+            require(width > 0 && height > 0) { "ابعاد ویدئو معتبر نیست" }
+            if (rotation % 180 != 0) height to width else width to height
+        } finally {
+            retriever.release()
+        }
+    }
+
     private fun buildAss(
+        frameWidth: Int,
+        frameHeight: Int,
         captions: List<CaptionItem>,
         preset: String,
         fontSize: Int,
@@ -489,16 +512,23 @@ class LocalCaptionEngine(private val context: Context) {
             else -> 3
         }
 
+        val scale = frameHeight / 1920.0
+        val scaledFontSize = (fontSize.coerceIn(36, 82) * scale).toInt().coerceAtLeast(12)
+        val scaledMargin = (marginV.coerceIn(40, 420) * scale).toInt().coerceAtLeast(8)
+        val scaledSideMargin = (60 * scale).toInt().coerceAtLeast(8)
+        val scaledOutline = (outline * scale).toInt().coerceAtLeast(1)
+        val scaledShadow = scale.toInt().coerceAtLeast(1)
+
         val header = """[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: $frameWidth
+PlayResY: $frameHeight
 WrapStyle: 2
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Premium,sans-serif,${fontSize.coerceIn(36,82)},$primary,&H00FFFFFF,&H00101010,$back,-1,0,0,0,100,100,0,0,$borderStyle,$outline,1,2,60,60,${marginV.coerceIn(40,420)},1
+Style: Premium,sans-serif,$scaledFontSize,$primary,&H00FFFFFF,&H00101010,$back,-1,0,0,0,100,100,0,0,$borderStyle,$scaledOutline,$scaledShadow,2,$scaledSideMargin,$scaledSideMargin,$scaledMargin,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
