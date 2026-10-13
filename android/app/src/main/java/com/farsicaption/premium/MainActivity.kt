@@ -476,14 +476,7 @@ private fun EditorScreen(
 ) {
     var tab by remember { mutableStateOf("text") }
     val activeCaption = captions.lastOrNull { currentPosition in it.start..it.end }
-    val displayText = activeCaption?.let { caption ->
-        if (caption.words.isNotEmpty()) {
-            caption.words
-                .filter { currentPosition >= it.start }
-                .joinToString(" ") { it.text }
-                .ifBlank { caption.text }
-        } else caption.text
-    }.orEmpty()
+    val displayText = activeCaption?.text.orEmpty()
 
     Scaffold(
         containerColor = Ink,
