@@ -177,9 +177,10 @@ private fun PremiumCaptionApp() {
     LaunchedEffect(sourceUri) {
         while (sourceUri != null) {
             val prefs = context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
-            val jobState = prefs.getString(TranscriptionService.KEY_STATE, "")
+            val matchingVideo = prefs.getString(TranscriptionService.KEY_URI, null) == sourceUri.toString()
+            val jobState = if (matchingVideo) prefs.getString(TranscriptionService.KEY_STATE, "") else ""
             isTranscribing = jobState == TranscriptionService.STATE_RUNNING
-            status = prefs.getString(TranscriptionService.KEY_STATUS, status) ?: status
+            if (matchingVideo) status = prefs.getString(TranscriptionService.KEY_STATUS, status) ?: status
             if (jobState == TranscriptionService.STATE_DONE) {
                 val array = JSONArray(prefs.getString(TranscriptionService.KEY_RESULT, "[]") ?: "[]")
                 val restoredCaptions = buildList {
@@ -261,6 +262,8 @@ private fun PremiumCaptionApp() {
                         onBack = {
                             sourceUri = null
                             captions = emptyList()
+                            isTranscribing = false
+                            context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
                             context.getSharedPreferences("project_state", Context.MODE_PRIVATE).edit().remove("active_project").apply()
                         },
                         onNewVideo = { picker.launch(arrayOf("video/*")) },
@@ -290,6 +293,7 @@ private fun PremiumCaptionApp() {
                                     putExtra(TranscriptionService.EXTRA_URI, uri.toString())
                                     putExtra(TranscriptionService.EXTRA_MAX_WORDS, maxWords.roundToInt())
                                     putExtra(TranscriptionService.EXTRA_LANGUAGE, language)
+                                    putExtra(TranscriptionService.EXTRA_JOB_ID, java.util.UUID.randomUUID().toString())
                                 }
                                 ContextCompat.startForegroundService(context, serviceIntent)
                             }
