@@ -277,25 +277,13 @@ private fun PremiumCaptionApp() {
                             val uri = sourceUri
                             if (uri != null && !isTranscribing) {
                                 isTranscribing = true
-                                modelProgress = if (engine.isModelReady()) 100 else 0
-                                scope.launch {
-                                    runCatching {
-                                        engine.transcribe(
-                                            uri = uri,
-                                            maxWords = maxWords.roundToInt(),
-                                            onStatus = { status = it },
-                                            onModelProgress = { modelProgress = it },
-                                        )
-                                    }.onSuccess { result ->
-                                        captions = result.captions
-                                        saveProjectState(context, uri, result.captions)
-                                        selectedIndex = 0
-                                        status = "زیرنویس آماده شد • ${result.captions.size} قطعه"
-                                    }.onFailure { e ->
-                                        status = e.message ?: "خطا در تشخیص گفتار"
-                                    }
-                                    isTranscribing = false
+                                status = "تشخیص گفتار در پس‌زمینه شروع شد"
+                                val serviceIntent = Intent(context, TranscriptionService::class.java).apply {
+                                    action = TranscriptionService.ACTION_START
+                                    putExtra(TranscriptionService.EXTRA_URI, uri.toString())
+                                    putExtra(TranscriptionService.EXTRA_MAX_WORDS, maxWords.roundToInt())
                                 }
+                                ContextCompat.startForegroundService(context, serviceIntent)
                             }
                         },
                         onExport = {
