@@ -358,7 +358,7 @@ class LocalCaptionEngine(private val context: Context) {
         end: Double,
         maxWords: Int,
     ): List<CaptionItem> {
-        val tokens = text.split(Regex("\s+")).filter { it.isNotBlank() }
+        val tokens = text.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
         val chunks = smartChunks(tokens, maxWords)
