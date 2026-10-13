@@ -132,7 +132,7 @@ class LocalCaptionEngine(private val context: Context) {
                 model,
                 audio.absolutePath,
                 WhisperConfig(
-                    language = if (language == "ar") "ar" else "fa",
+                    language = SpeechLanguagePolicy.whisperLanguage(language),
                     threads = threads,
                     printTimestamps = true,
                     maxSegmentLength = 80,
@@ -439,20 +439,8 @@ class LocalCaptionEngine(private val context: Context) {
         return output
     }
 
-    private fun cleanSpeechText(raw: String, language: String): String {
-        val stripped = raw
-            .replace(Regex("\\[(music|موسیقی|silence|آهنگ|applause|تشویق)[^]]*]", RegexOption.IGNORE_CASE), " ")
-            .replace(Regex("\\((music|موسیقی|silence|آهنگ|applause|تشویق)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
-            .trim()
-
-        val text = if (language == "ar") stripped else PersianTextNormalizer.normalize(stripped, correctionStore.all())
-        val normalized = text.lowercase().replace("[", "").replace("]", "").trim()
-
-        if (normalized in setOf("music", "موسیقی", "آهنگ", "silence", "applause", "تشویق")) {
-            return ""
-        }
-        return text
-    }
+    private fun cleanSpeechText(raw: String, language: String): String =
+        SpeechLanguagePolicy.clean(raw, language, correctionStore.all())
 
     fun correctionCount(): Int = correctionStore.size()
 
