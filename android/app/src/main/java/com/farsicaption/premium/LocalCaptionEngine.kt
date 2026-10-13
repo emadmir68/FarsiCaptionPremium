@@ -123,7 +123,7 @@ class LocalCaptionEngine(private val context: Context) {
 
         val model = Whisper.loadModel(context, modelFile.absolutePath)
         return try {
-            val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+            val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
             val result = Whisper.transcribe(
                 model,
                 audio.absolutePath,
@@ -278,10 +278,9 @@ class LocalCaptionEngine(private val context: Context) {
     }
 
     private fun preferredModelSpec(): ModelSpec {
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val info = ActivityManager.MemoryInfo()
-        manager.getMemoryInfo(info)
-        return if (info.totalMem >= TURBO_MIN_RAM_BYTES) TURBO_MODEL else SMALL_MODEL
+        // Fast mode is the default: Small is substantially lighter for on-device transcription.
+        // Turbo remains available as a fallback target for future explicit "Accurate" mode.
+        return SMALL_MODEL
     }
 
     private fun modelFile(spec: ModelSpec): File {
