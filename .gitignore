@@ -5,3 +5,9 @@ __pycache__/
 android/.gradle/
 android/local.properties
 android/app/build/
+
+android/signing/
+android/app/.cxx/
+native-build/
+dist/
+previous/

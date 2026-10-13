@@ -67,6 +67,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -113,36 +114,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun saveProjectState(context: Context, uri: Uri?, captions: List<CaptionItem>) {
-    val root = JSONObject().put("sourceUri", uri?.toString().orEmpty())
-    val array = JSONArray()
-    captions.forEach { caption ->
-        array.put(JSONObject()
-            .put("text", caption.text)
-            .put("start", caption.start)
-            .put("end", caption.end))
-    }
-    root.put("captions", array)
-    context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
-        .edit().putString("active_project", root.toString()).apply()
+private data class SavedProject(val uri: Uri?, val captions: List<CaptionItem>, val jobId: String?, val appliedJob: String?)
+private fun saveProjectState(context: Context, uri: Uri?, captions: List<CaptionItem>, jobId: String?, appliedJob: String?) {
+    if (uri == null) return
+    val root = JSONObject().put("sourceUri", uri.toString()).put("captions", CaptionJson.encode(captions))
+        .put("jobId", jobId).put("appliedJob", appliedJob)
+    context.getSharedPreferences("project_state", Context.MODE_PRIVATE).edit()
+        .putString("active_project", root.toString()).putString("project:$uri", root.toString()).apply()
 }
-
-private fun restoreProjectState(context: Context): Pair<Uri?, List<CaptionItem>> {
-    val raw = context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
-        .getString("active_project", null) ?: return null to emptyList()
-    return runCatching {
-        val root = JSONObject(raw)
-        val uri = root.optString("sourceUri").takeIf { it.isNotBlank() }?.let(Uri::parse)
-        val array = root.optJSONArray("captions") ?: JSONArray()
-        val captions = buildList {
-            for (i in 0 until array.length()) {
-                val item = array.getJSONObject(i)
-                add(CaptionItem(item.optString("text"), item.optDouble("start"), item.optDouble("end")))
-            }
-        }
-        uri to captions
-    }.getOrElse { null to emptyList() }
-}
+private fun restoreProjectState(context: Context): SavedProject = runCatching {
+    val root = JSONObject(context.getSharedPreferences("project_state", Context.MODE_PRIVATE).getString("active_project", "{}") ?: "{}")
+    fun value(key: String) = root.optString(key).takeIf { it.isNotBlank() && it != "null" }
+    SavedProject(value("sourceUri")?.let(Uri::parse), CaptionJson.decode(root.optJSONArray("captions") ?: JSONArray()), value("jobId"), value("appliedJob"))
+}.getOrElse { SavedProject(null, emptyList(), null, null) }
 
 @Composable
 private fun PremiumCaptionApp() {
@@ -151,8 +135,11 @@ private fun PremiumCaptionApp() {
     val engine = remember { LocalCaptionEngine(context) }
 
     // A fresh app launch always starts at Home. Persisted projects are never forced open.
-    var sourceUri by remember { mutableStateOf<Uri?>(null) }
-    var captions by remember { mutableStateOf<List<CaptionItem>>(emptyList()) }
+    var sourceString by rememberSaveable { mutableStateOf<String?>(null) }
+    val sourceUri = sourceString?.let(Uri::parse)
+    var activeJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var appliedJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var captions by remember { mutableStateOf(if (sourceString != null) restoreProjectState(context).captions else emptyList()) }
     var selectedIndex by remember { mutableIntStateOf(0) }
     var currentPosition by remember { mutableDoubleStateOf(0.0) }
     var seekTarget by remember { mutableStateOf<Double?>(null) }
@@ -167,32 +154,36 @@ private fun PremiumCaptionApp() {
         )
     }
 
-    var maxWords by remember { mutableFloatStateOf(5f) }
-    var preset by remember { mutableStateOf("luxury") }
-    var fontSize by remember { mutableFloatStateOf(56f) }
-    var marginV by remember { mutableFloatStateOf(120f) }
-    var textColorKey by remember { mutableStateOf("cream") }
-    var backgroundKey by remember { mutableStateOf("none") }
-
-    LaunchedEffect(sourceUri) {
-        while (sourceUri != null) {
+    val editorSettings = remember { context.getSharedPreferences("editor_settings", Context.MODE_PRIVATE) }
+    var maxWords by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("maxWords", 5f)) }
+    var preset by rememberSaveable { mutableStateOf(editorSettings.getString("preset", "luxury") ?: "luxury") }
+    var fontSize by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("fontSize", 56f)) }
+    var marginV by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("marginV", 120f)) }
+    var textColorKey by rememberSaveable { mutableStateOf(editorSettings.getString("textColor", "cream") ?: "cream") }
+    var backgroundKey by rememberSaveable { mutableStateOf(editorSettings.getString("background", "none") ?: "none") }
+    LaunchedEffect(maxWords, preset, fontSize, marginV, textColorKey, backgroundKey) {
+        editorSettings.edit().putFloat("maxWords", maxWords).putString("preset", preset)
+            .putFloat("fontSize", fontSize).putFloat("marginV", marginV)
+            .putString("textColor", textColorKey).putString("background", backgroundKey).apply()
+    }
+    LaunchedEffect(sourceString, activeJobId) {
+        val delivery = ResultDelivery(appliedJobId)
+        while (sourceString != null) {
             val prefs = context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
-            val matchingVideo = prefs.getString(TranscriptionService.KEY_URI, null) == sourceUri.toString()
-            val jobState = if (matchingVideo) prefs.getString(TranscriptionService.KEY_STATE, "") else ""
-            isTranscribing = jobState == TranscriptionService.STATE_RUNNING
-            if (matchingVideo) status = prefs.getString(TranscriptionService.KEY_STATUS, status) ?: status
-            if (jobState == TranscriptionService.STATE_DONE) {
-                val array = JSONArray(prefs.getString(TranscriptionService.KEY_RESULT, "[]") ?: "[]")
-                val restoredCaptions = buildList {
-                    for (i in 0 until array.length()) {
-                        val item = array.getJSONObject(i)
-                        add(CaptionItem(item.optString("text"), item.optDouble("start"), item.optDouble("end")))
-                    }
-                }
-                if (restoredCaptions.isNotEmpty() && restoredCaptions != captions) {
-                    captions = restoredCaptions
-                    saveProjectState(context, sourceUri, restoredCaptions)
-                }
+            val identity = JobIdentity(activeJobId.orEmpty(), sourceString.orEmpty())
+            val actualId = prefs.getString(TranscriptionService.KEY_JOB_ID, null)
+            val actualUri = prefs.getString(TranscriptionService.KEY_URI, null)
+            val matching = identity.matches(actualId, actualUri)
+            val state = if (matching) prefs.getString(TranscriptionService.KEY_STATE, "") else ""
+            isTranscribing = state == TranscriptionService.STATE_RUNNING
+            if (matching) {
+                status = prefs.getString(TranscriptionService.KEY_STATUS, status) ?: status
+                modelProgress = prefs.getInt(TranscriptionService.KEY_PROGRESS, modelProgress)
+            }
+            if (delivery.consume(identity, actualId, actualUri, state == TranscriptionService.STATE_DONE)) {
+                captions = CaptionJson.decode(JSONArray(prefs.getString(TranscriptionService.KEY_RESULT, "[]") ?: "[]"))
+                appliedJobId = activeJobId
+                saveProjectState(context, sourceUri, captions, activeJobId, appliedJobId)
             }
             delay(700)
         }
@@ -200,15 +191,15 @@ private fun PremiumCaptionApp() {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            // New media is a hard project boundary. Clear both the editor state and
-            // any finished/running transcription payload from the previous video.
-            context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
-                .edit().clear().commit()
-            context.getSharedPreferences("project_state", Context.MODE_PRIVATE)
-                .edit().remove("active_project").commit()
-            sourceUri = uri
+            TranscriptionJobStore.detach(context)
+            context.stopService(Intent(context, TranscriptionService::class.java))
+            sourceString = uri.toString()
+            activeJobId = null
+            appliedJobId = null
+            isTranscribing = false
+            seekTarget = null
             captions = emptyList()
-            saveProjectState(context, uri, emptyList())
+            saveProjectState(context, uri, captions, activeJobId, appliedJobId)
             selectedIndex = 0
             currentPosition = 0.0
             status = "ویدیو جدید آماده است؛ برای ساخت زیرنویس، تشخیص گفتار را اجرا کن"
@@ -239,6 +230,14 @@ private fun PremiumCaptionApp() {
                         engineLabel = engine.preferredModelLabel(),
                         engineDownload = engine.preferredModelDownloadLabel(),
                         onPickVideo = { picker.launch(arrayOf("video/*")) },
+                        canResume = restoreProjectState(context).uri != null,
+                        onResume = {
+                            val saved = restoreProjectState(context)
+                            sourceString = saved.uri?.toString()
+                            captions = saved.captions
+                            activeJobId = saved.jobId
+                            appliedJobId = saved.appliedJob
+                        },
                     )
                 } else {
                     EditorScreen(
@@ -260,11 +259,10 @@ private fun PremiumCaptionApp() {
                         onPosition = { currentPosition = it },
                         onSeekConsumed = { seekTarget = null },
                         onBack = {
-                            sourceUri = null
+                            saveProjectState(context, sourceUri, captions, activeJobId, appliedJobId)
+                            sourceString = null
                             captions = emptyList()
                             isTranscribing = false
-                            context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
-                            context.getSharedPreferences("project_state", Context.MODE_PRIVATE).edit().remove("active_project").apply()
                         },
                         onNewVideo = { picker.launch(arrayOf("video/*")) },
                         onMaxWords = { maxWords = it },
@@ -282,20 +280,29 @@ private fun PremiumCaptionApp() {
                                 val old = list[index]
                                 list[index] = old.copy(text = text, words = emptyList())
                             }
+                            saveProjectState(context, sourceUri, captions, activeJobId, appliedJobId)
                         },
                         onTranscribe = { language ->
                             val uri = sourceUri
                             if (uri != null && !isTranscribing) {
                                 isTranscribing = true
                                 status = "تشخیص گفتار در پس‌زمینه شروع شد"
+                                val jobId = java.util.UUID.randomUUID().toString()
+                                activeJobId = jobId
+                                val identity = JobIdentity(jobId, uri.toString())
+                                TranscriptionJobStore.start(context, identity)
+                                saveProjectState(context, uri, captions, activeJobId, appliedJobId)
                                 val serviceIntent = Intent(context, TranscriptionService::class.java).apply {
                                     action = TranscriptionService.ACTION_START
                                     putExtra(TranscriptionService.EXTRA_URI, uri.toString())
                                     putExtra(TranscriptionService.EXTRA_MAX_WORDS, maxWords.roundToInt())
                                     putExtra(TranscriptionService.EXTRA_LANGUAGE, language)
-                                    putExtra(TranscriptionService.EXTRA_JOB_ID, java.util.UUID.randomUUID().toString())
+                                    putExtra(TranscriptionService.EXTRA_JOB_ID, jobId)
                                 }
-                                ContextCompat.startForegroundService(context, serviceIntent)
+                                runCatching { ContextCompat.startForegroundService(context, serviceIntent) }.onFailure {
+                                    isTranscribing = false
+                                    TranscriptionJobStore.update(context, identity, TranscriptionService.STATE_ERROR, it.message ?: "شروع تشخیص گفتار ناموفق بود")
+                                }
                             }
                         },
                         onExport = {
@@ -303,10 +310,6 @@ private fun PremiumCaptionApp() {
                             if (uri != null && captions.isNotEmpty() && !isExporting) {
                                 isExporting = true
                                 scope.launch {
-                                    captions
-                                        .filter { it.originalText != it.text }
-                                        .forEach { engine.learnCorrection(it.originalText, it.text) }
-
                                     runCatching {
                                         engine.export(
                                             uri = uri,
@@ -349,6 +352,8 @@ private fun HomeScreen(
     engineLabel: String,
     engineDownload: String,
     onPickVideo: () -> Unit,
+    canResume: Boolean,
+    onResume: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -417,6 +422,9 @@ private fun HomeScreen(
             )
 
             PremiumImportCard(onPickVideo)
+            if (canResume) OutlinedButton(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
+                Text("ادامهٔ پروژهٔ قبلی", color = GoldSoft)
+            }
 
             Row(
                 Modifier
@@ -424,7 +432,7 @@ private fun HomeScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FeaturePill("Accuracy Max")
+                FeaturePill("فارسی و عربی")
                 FeaturePill("بدون توکن")
                 FeaturePill("آفلاین")
                 FeaturePill("RTL فارسی")
@@ -439,8 +447,8 @@ private fun HomeScreen(
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("Premium Engine • Adaptive Accuracy", color = GoldSoft, fontWeight = FontWeight.Bold)
                     EngineRow("01", engineLabel, "انتخاب خودکار بالاترین مدل پایدار • دانلود $engineDownload")
-                    EngineRow("02", "Persian Clean Audio", "کاهش نویز + نرمال‌سازی صدا قبل از تشخیص")
-                    EngineRow("03", "Self‑Learning Persian", "اصلاحات دستی را یاد می‌گیرد و دفعه بعد خودکار اعمال می‌کند")
+                    EngineRow("02", "Persian Clean Audio", "تشخیص بخش‌های گفتار با حفظ صدای اصلی")
+                    EngineRow("03", "Project Editing", "ویرایش‌های دستی برای همین پروژه ذخیره می‌شوند")
                     EngineRow("04", "Luxury Editor", "Drag کپشن، رنگ، پس‌زمینه، اندازه و استایل زنده")
                 }
             }

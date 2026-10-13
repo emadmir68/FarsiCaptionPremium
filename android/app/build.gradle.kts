@@ -9,13 +9,15 @@ val stableDevKeystore = rootProject.file("signing/farsi-caption-dev.jks")
 android {
     namespace = "com.farsicaption.premium"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "com.farsicaption.premium"
+        ndk { abiFilters += "arm64-v8a" }
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "3.3.0-ultra"
+        versionCode = 43
+        versionName = "3.3.1-ultra"
     }
 
     signingConfigs {
@@ -26,6 +28,8 @@ android {
             keyPassword = "FarsiCaptionDev2026"
         }
     }
+
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
 
     buildTypes {
         debug {
@@ -66,11 +70,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
 
-    implementation("dev.ffmpegkit-maintained:whisper-android:1.0.0")
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9")
 }

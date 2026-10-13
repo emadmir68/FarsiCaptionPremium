@@ -14,6 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -30,14 +34,20 @@ class TranscriptionService : Service() {
         const val KEY_STATE = "state"
         const val KEY_STATUS = "status"
         const val KEY_RESULT = "result"
+        const val KEY_PROGRESS = "model_progress"
         const val STATE_RUNNING = "running"
         const val STATE_DONE = "done"
         const val STATE_ERROR = "error"
         private const val CHANNEL_ID = "transcription"
         private const val NOTIFICATION_ID = 41
+        private val nativeGate = Mutex()
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private var activeJob: Job? = null
+    @Volatile private var activeEngine: LocalCaptionEngine? = null
+    @Volatile private var activeIdentity: JobIdentity? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -53,53 +63,41 @@ class TranscriptionService : Service() {
         val maxWords = intent.getIntExtra(EXTRA_MAX_WORDS, 5)
         val language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "fa"
         val jobId = intent.getStringExtra(EXTRA_JOB_ID) ?: return START_NOT_STICKY
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putString(KEY_JOB_ID, jobId)
-            .putString(KEY_URI, uri.toString())
-            .putString(KEY_STATE, STATE_RUNNING)
-            .putString(KEY_STATUS, "در حال آماده‌سازی تشخیص گفتار…")
-            .remove(KEY_RESULT).commit()
+        val identity = JobIdentity(jobId, uri.toString())
+        if (!TranscriptionJobStore.matches(this, identity)) return START_NOT_STICKY
+        if (activeIdentity == identity && activeJob?.isActive == true) return START_REDELIVER_INTENT
+        if (getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_STATE, "") == STATE_DONE) {
+            stopSelf(startId); return START_NOT_STICKY
+        }
+        activeEngine?.cancel(); activeJob?.cancel()
+        activeIdentity = identity
         startForeground(NOTIFICATION_ID, notification("در حال آماده‌سازی…"))
-
-        scope.launch {
-            runCatching {
-                LocalCaptionEngine(applicationContext).transcribe(
-                    uri = uri,
-                    maxWords = maxWords,
-                    language = language,
-                    onStatus = { status ->
-                        updateState(jobId, STATE_RUNNING, status)
-                        getSystemService(NotificationManager::class.java)
-                            .notify(NOTIFICATION_ID, notification(status))
-                    },
-                )
-            }.onSuccess { result ->
-                val array = JSONArray()
-                result.captions.forEach { c ->
-                    array.put(JSONObject().put("text", c.text).put("start", c.start).put("end", c.end))
+        activeJob = scope.launch {
+            try {
+                nativeGate.withLock {
+                    if (!TranscriptionJobStore.matches(applicationContext, identity)) return@withLock
+                    val engine = LocalCaptionEngine(applicationContext)
+                    activeEngine = engine
+                    val result = try {
+                        engine.transcribe(uri, maxWords, language, onStatus = { status ->
+                            if (TranscriptionJobStore.update(applicationContext, identity, STATE_RUNNING, status)) {
+                                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
+                            }
+                        }, onModelProgress = { progress -> TranscriptionJobStore.progress(applicationContext, identity, progress) })
+                    } finally { if (activeEngine === engine) activeEngine = null }
+                    val array = CaptionJson.encode(result.captions)
+                    val message = if (result.captions.isEmpty()) "گفتاری پیدا نشد؛ زیرنویسی اضافه نشد" else "زیرنویس آماده شد • ${result.captions.size} قطعه"
+                    if (TranscriptionJobStore.update(applicationContext, identity, STATE_DONE, message, array.toString())) {
+                        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(message))
+                    }
                 }
-                if (isCurrentJob(jobId)) getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putString(KEY_STATE, STATE_DONE)
-                    .putString(KEY_STATUS, "زیرنویس آماده شد • ${result.captions.size} قطعه")
-                    .putString(KEY_RESULT, array.toString()).apply()
-                getSystemService(NotificationManager::class.java)
-                    .notify(NOTIFICATION_ID, notification("زیرنویس آماده شد"))
-            }.onFailure { e ->
-                updateState(jobId, STATE_ERROR, e.message ?: "خطا در تشخیص گفتار")
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { TranscriptionJobStore.update(applicationContext, identity, STATE_ERROR, e.message ?: "خطا در تشخیص گفتار") }
+            finally {
+                if (activeIdentity == identity) { stopForeground(STOP_FOREGROUND_DETACH); stopSelf(startId) }
             }
-            stopForeground(STOP_FOREGROUND_DETACH)
-            stopSelf(startId)
         }
         return START_REDELIVER_INTENT
-    }
-
-    private fun isCurrentJob(jobId: String): Boolean =
-        getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_JOB_ID, null) == jobId
-
-    private fun updateState(jobId: String, state: String, status: String) {
-        if (!isCurrentJob(jobId)) return
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putString(KEY_STATE, state).putString(KEY_STATUS, status).apply()
     }
 
     private fun notification(text: String) = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -112,6 +110,7 @@ class TranscriptionService : Service() {
         .build()
 
     override fun onDestroy() {
+        activeEngine?.cancel()
         scope.cancel()
         super.onDestroy()
     }

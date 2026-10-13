@@ -1,72 +1,76 @@
-name: Build Farsi Caption Premium
-
+name: Build and release Farsi Caption
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-
+    branches: [main, codex/persian-asr-repair]
+  pull_request:
 permissions:
-  contents: write
-
+  contents: read
 concurrency:
-  group: farsi-caption-stable-alpha
+  group: farsi-caption-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   android-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
-
+          java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
-
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.10.2"
-
-      - name: Restore stable alpha signing cache
-        uses: actions/cache@v4
+          gradle-version: '8.10.2'
+      - name: Restore existing signing key
+        uses: actions/cache/restore@v4
         with:
           path: android/signing/farsi-caption-dev.jks
           key: farsi-caption-stable-signing-v1
-
-      - name: Ensure stable alpha signing key
-        shell: bash
+          fail-on-cache-miss: true
+      - name: Verify existing key is available
         run: |
-          mkdir -p android/signing
-          if [ ! -s android/signing/farsi-caption-dev.jks ]; then
-            keytool -genkeypair               -keystore android/signing/farsi-caption-dev.jks               -storepass FarsiCaptionDev2026               -keypass FarsiCaptionDev2026               -alias farsicaption               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=FarsiCaptionPremium Alpha, OU=Development, O=FarsiCaption, L=Local, ST=Local, C=US"
-          fi
-          keytool -list             -keystore android/signing/farsi-caption-dev.jks             -storepass FarsiCaptionDev2026             -alias farsicaption >/dev/null
-
-      - name: Test Persian text pipeline
+          test -s android/signing/farsi-caption-dev.jks
+          keytool -list -keystore android/signing/farsi-caption-dev.jks -storepass FarsiCaptionDev2026 -alias farsicaption >/dev/null
+      - name: Test native decoder contract
+        run: |
+          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" -S android/app/src/main/cpp -B native-build -DCMAKE_BUILD_TYPE=Release
+          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" --build native-build --parallel 2
+          "$ANDROID_HOME/cmake/3.22.1/bin/ctest" --test-dir native-build --output-on-failure
+      - name: Test caption and language regressions
         working-directory: android
-        run: gradle :app:testDebugUnitTest --stacktrace
-
-      - name: Build signed debug APK
+        run: gradle :app:testDebugUnitTest --stacktrace --max-workers=2
+      - name: Build signed release APK
         working-directory: android
-        run: gradle :app:assembleDebug --stacktrace
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: FarsiCaptionPremium-v3.2.8-stable-alpha-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-
-      - name: Publish Premium v3.2.8 APK
+        run: gradle :app:assembleRelease --stacktrace --max-workers=2
+      - name: Verify upgrade signature and package version
+        id: package
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk FarsiCaptionPremium-v3.2.8-stable-alpha.apk
-          if gh release view v3.2.8-stable-alpha >/dev/null 2>&1; then
-            gh release upload v3.2.8-stable-alpha FarsiCaptionPremium-v3.2.8-stable-alpha.apk --clobber
-          else
-            gh release create v3.2.8-stable-alpha FarsiCaptionPremium-v3.2.8-stable-alpha.apk               --target "$GITHUB_SHA"               --title "FarsiCaptionPremium v3.2.8 Stable Alpha"               --notes "Clean launch behavior: the app opens on Home instead of forcing the previous project. Closing a project clears its active state. Includes Persian, Arabic and Auto ASR modes."
-          fi
+          mkdir -p previous
+          gh release download v3.2.8-stable-alpha --pattern '*.apk' --dir previous
+          python3 scripts/package_release.py --previous previous/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FarsiCaptionPremium-v${{ steps.package.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-test-results
+          path: |
+            android/app/build/test-results/
+            native-build/Testing/Temporary/LastTest.log
+      - name: Publish matching version
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "FarsiCaptionPremium v$VERSION" --notes-file docs/release-notes.md --prerelease
