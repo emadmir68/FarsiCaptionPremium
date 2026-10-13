@@ -548,8 +548,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     }
 
     private fun assDialogue(start: Double, end: Double, rawText: String): String {
-        val clean = "\u200F" + PersianTextNormalizer
-            .normalize(rawText, correctionStore.all())
+        val clean = "\u200F" + rawText
             .replace("\\", "\\\\")
             .replace("{", "\\{")
             .replace("}", "\\}")
