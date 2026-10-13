@@ -134,13 +134,26 @@ class LocalCaptionEngine(private val context: Context) {
             )
 
             val captions = mutableListOf<CaptionItem>()
+            var previousSegmentText = ""
+            var previousSegmentEnd = 0.0
             result.segments.forEach { segment ->
                 val cleaned = cleanSpeechText(segment.text)
                 if (cleaned.isBlank()) return@forEach
 
-                val start = segment.startMs.toDouble() / 1000.0
-                val end = max(start + 0.18, segment.endMs.toDouble() / 1000.0)
-                captions += splitSegment(cleaned, start, end, maxWords.coerceIn(2, 7))
+                val incremental = incrementalText(previousSegmentText, cleaned)
+                val rawStart = segment.startMs.toDouble() / 1000.0
+                val end = max(rawStart + 0.18, segment.endMs.toDouble() / 1000.0)
+
+                if (incremental.isNotBlank()) {
+                    val removedPrefix = incremental != cleaned
+                    val start = if (removedPrefix) max(rawStart, previousSegmentEnd) else rawStart
+                    if (end > start) {
+                        captions += splitSegment(incremental, start, end, maxWords.coerceIn(2, 7))
+                    }
+                }
+
+                previousSegmentText = cleaned
+                previousSegmentEnd = max(previousSegmentEnd, end)
             }
 
             dedupeLikelyHallucinations(captions)
@@ -168,6 +181,23 @@ class LocalCaptionEngine(private val context: Context) {
         if (!ReturnCode.isSuccess(basic.returnCode)) {
             error("استخراج صدا انجام نشد")
         }
+    }
+
+    internal fun incrementalText(previous: String, current: String): String {
+        val prevTokens = previous.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        val currentTokens = current.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        if (prevTokens.isEmpty() || currentTokens.size <= prevTokens.size) return current
+
+        fun key(token: String) = token
+            .replace("‌", "")
+            .trim('،', '؛', ':', '.', '!', '؟', '?', '«', '»', '(', ')')
+
+        val prefixMatches = prevTokens.indices.all { index ->
+            key(prevTokens[index]) == key(currentTokens[index])
+        }
+        if (!prefixMatches) return current
+
+        return currentTokens.drop(prevTokens.size).joinToString(" ")
     }
 
     private fun dedupeLikelyHallucinations(items: List<CaptionItem>): List<CaptionItem> {
