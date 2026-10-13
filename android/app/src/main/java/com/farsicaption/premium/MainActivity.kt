@@ -2,6 +2,8 @@ package com.farsicaption.premium
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -155,7 +157,7 @@ private fun PremiumCaptionApp() {
     var currentPosition by remember { mutableDoubleStateOf(0.0) }
     var seekTarget by remember { mutableStateOf<Double?>(null) }
 
-    var isTranscribing by remember { mutableStateOf(false) }
+    var isTranscribing by remember { mutableStateOf(context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE).getString(TranscriptionService.KEY_STATE, "") == TranscriptionService.STATE_RUNNING) }
     var isExporting by remember { mutableStateOf(false) }
     var modelProgress by remember { mutableIntStateOf(if (engine.isModelReady()) 100 else 0) }
     var status by remember {
