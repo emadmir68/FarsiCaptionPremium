@@ -93,4 +93,31 @@ class PersianTextNormalizerTest {
             PersianTextNormalizer.normalize("می‌روم API"),
         )
     }
+
+    @Test
+    fun cumulativeTranscriptKeepsOnlyNewWords() {
+        val engine = LocalCaptionEngineForTextTest
+        assertEquals("خوبی؟", engine.incremental("سلام", "سلام خوبی؟"))
+        assertEquals("چه خبر", engine.incremental("سلام خوبی؟", "سلام خوبی؟ چه خبر"))
+    }
+
+    @Test
+    fun independentRepeatedSpeechIsNotMistakenForCumulativeGrowth() {
+        val engine = LocalCaptionEngineForTextTest
+        assertEquals("سلام", engine.incremental("سلام", "سلام"))
+        assertEquals("سلام دوست", engine.incremental("خوبی", "سلام دوست"))
+    }
+
+}
+
+
+private object LocalCaptionEngineForTextTest {
+    fun incremental(previous: String, current: String): String {
+        val prevTokens = previous.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        val currentTokens = current.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        if (prevTokens.isEmpty() || currentTokens.size <= prevTokens.size) return current
+        fun key(token: String) = token.replace("‌", "").trim('،', '؛', ':', '.', '!', '؟', '?', '«', '»', '(', ')')
+        if (!prevTokens.indices.all { key(prevTokens[it]) == key(currentTokens[it]) }) return current
+        return currentTokens.drop(prevTokens.size).joinToString(" ")
+    }
 }
