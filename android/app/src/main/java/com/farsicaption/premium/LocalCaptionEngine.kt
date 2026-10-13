@@ -58,6 +58,7 @@ class LocalCaptionEngine(private val context: Context) {
     suspend fun transcribe(
         uri: Uri,
         maxWords: Int,
+        language: String = "fa",
         onStatus: (String) -> Unit,
         onModelProgress: (Int) -> Unit = {},
     ): TranscriptionResult = withContext(Dispatchers.IO) {
@@ -82,6 +83,7 @@ class LocalCaptionEngine(private val context: Context) {
                     modelFile = initialModel,
                     audio = audio,
                     maxWords = maxWords,
+                    language = language,
                     onStatus = onStatus,
                 )
             } catch (primaryError: Exception) {
@@ -93,6 +95,7 @@ class LocalCaptionEngine(private val context: Context) {
                     modelFile = fallback,
                     audio = audio,
                     maxWords = maxWords,
+                    language = language,
                     onStatus = onStatus,
                 )
             }
@@ -116,10 +119,11 @@ class LocalCaptionEngine(private val context: Context) {
         modelFile: File,
         audio: File,
         maxWords: Int,
+        language: String,
         onStatus: (String) -> Unit,
     ): List<CaptionItem> {
         val label = if (modelFile.name == TURBO_MODEL.name) TURBO_MODEL.label else SMALL_MODEL.label
-        onStatus("در حال تشخیص گفتار فارسی با $label…")
+        onStatus("در حال تشخیص گفتار با $label…")
 
         val model = Whisper.loadModel(context, modelFile.absolutePath)
         return try {
@@ -128,7 +132,7 @@ class LocalCaptionEngine(private val context: Context) {
                 model,
                 audio.absolutePath,
                 WhisperConfig(
-                    language = "fa",
+                    language = language.takeIf { it in setOf("fa", "ar", "auto") } ?: "fa",
                     threads = threads,
                     printTimestamps = true,
                     maxSegmentLength = 80,
@@ -139,7 +143,7 @@ class LocalCaptionEngine(private val context: Context) {
             var previousSegmentText = ""
             var previousSegmentEnd = 0.0
             result.segments.forEach { segment ->
-                val cleaned = cleanSpeechText(segment.text)
+                val cleaned = cleanSpeechText(segment.text, language)
                 if (cleaned.isBlank()) return@forEach
 
                 val incremental = incrementalText(previousSegmentText, cleaned)
@@ -169,7 +173,7 @@ class LocalCaptionEngine(private val context: Context) {
         // reduce stationary noise, then normalize loudness for more stable ASR.
         val enhanced = FFmpegKit.execute(
             "-y -i ${q(video.absolutePath)} -vn -ac 1 -ar 16000 " +
-                "-af \"highpass=f=75,lowpass=f=7800,afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11\" " +
+                "-af \"highpass=f=75,lowpass=f=7800\" " +
                 "-c:a pcm_s16le ${q(audio.absolutePath)}"
         )
         if (ReturnCode.isSuccess(enhanced.returnCode) && audio.exists() && audio.length() > 1024L) {
@@ -435,13 +439,13 @@ class LocalCaptionEngine(private val context: Context) {
         return output
     }
 
-    private fun cleanSpeechText(raw: String): String {
+    private fun cleanSpeechText(raw: String, language: String): String {
         val stripped = raw
             .replace(Regex("\\[(music|موسیقی|silence|آهنگ|applause|تشویق)[^]]*]", RegexOption.IGNORE_CASE), " ")
             .replace(Regex("\\((music|موسیقی|silence|آهنگ|applause|تشویق)[^)]*\\)", RegexOption.IGNORE_CASE), " ")
             .trim()
 
-        val text = PersianTextNormalizer.normalize(stripped, correctionStore.all())
+        val text = if (language == "ar" || (language == "auto" && !Regex("[پچژگکیی]").containsMatchIn(stripped))) stripped else PersianTextNormalizer.normalize(stripped, correctionStore.all())
         val normalized = text.lowercase().replace("[", "").replace("]", "").trim()
 
         if (normalized in setOf("music", "موسیقی", "آهنگ", "silence", "applause", "تشویق")) {
