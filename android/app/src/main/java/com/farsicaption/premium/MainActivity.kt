@@ -174,6 +174,29 @@ private fun PremiumCaptionApp() {
     var textColorKey by remember { mutableStateOf("cream") }
     var backgroundKey by remember { mutableStateOf("none") }
 
+    LaunchedEffect(sourceUri) {
+        while (sourceUri != null) {
+            val prefs = context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
+            val jobState = prefs.getString(TranscriptionService.KEY_STATE, "")
+            isTranscribing = jobState == TranscriptionService.STATE_RUNNING
+            status = prefs.getString(TranscriptionService.KEY_STATUS, status) ?: status
+            if (jobState == TranscriptionService.STATE_DONE) {
+                val array = JSONArray(prefs.getString(TranscriptionService.KEY_RESULT, "[]") ?: "[]")
+                val restoredCaptions = buildList {
+                    for (i in 0 until array.length()) {
+                        val item = array.getJSONObject(i)
+                        add(CaptionItem(item.optString("text"), item.optDouble("start"), item.optDouble("end")))
+                    }
+                }
+                if (restoredCaptions.isNotEmpty() && restoredCaptions != captions) {
+                    captions = restoredCaptions
+                    saveProjectState(context, sourceUri, restoredCaptions)
+                }
+            }
+            delay(700)
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             sourceUri = uri
