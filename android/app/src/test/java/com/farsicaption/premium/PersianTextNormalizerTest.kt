@@ -113,8 +113,8 @@ class PersianTextNormalizerTest {
 
 private object LocalCaptionEngineForTextTest {
     fun incremental(previous: String, current: String): String {
-        val prevTokens = previous.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
-        val currentTokens = current.trim().split(Regex("""\\s+""")).filter { it.isNotBlank() }
+        val prevTokens = previous.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }
+        val currentTokens = current.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }
         if (prevTokens.isEmpty() || currentTokens.size <= prevTokens.size) return current
         fun key(token: String) = token.replace("‌", "").trim('،', '؛', ':', '.', '!', '؟', '?', '«', '»', '(', ')')
         if (!prevTokens.indices.all { key(prevTokens[it]) == key(currentTokens[it]) }) return current
