@@ -1,4 +1,6 @@
-# Persian ASR audit — 3.3.1-ultra
+# Persian ASR audit — version history
+
+The original 3.3.1 findings below are historical. Later sections supersede its fallback policy and test status. Current 3.4.0 measurements: [reference benchmark](ASR-BENCHMARK-3.4.0.md).
 
 Base: b74d7d8976ce70aeaf7bf7de026e5a8a9d50e11f. applicationId remains com.farsicaption.premium. This audit inspected the repository/history, wrapper source and native decoder; it does not treat prior changes or a green build as evidence of ASR accuracy.
 
