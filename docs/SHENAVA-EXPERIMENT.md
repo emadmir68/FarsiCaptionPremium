@@ -3,7 +3,7 @@
 This branch does **not** replace Whisper in the Android app. It establishes a reproducible gate before adding a second native runtime. The existing Android application ID, project files, model cache and user settings are untouched.
 
 ## Candidate
-- Canonical model: Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx (Apache-2.0 metadata and LICENSE; recheck the exact revision and upstream dependencies before redistribution).
+- Canonical model: Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx. **License conflict:** the Hugging Face repository currently displays Apache-2.0 metadata, but its historical README front matter at commit b67cd88 declares CC-BY-NC-4.0. A third-party INT8 conversion also declares CC-BY-NC-4.0. Treat commercial redistribution as **unresolved** until the original rights holder explicitly clarifies the licensing of the exact checkpoint and conversion. Do not bundle or automatically download this model in a production APK.
 - Offline FastConformer CTC, model.onnx + tokens.txt; ~459 MB FP32 model.
 - 16 kHz mono waveform. Do not enable sherpa-onnx per-feature normalization: model metadata leaves normalize_type empty.
 - No reliable per-word timestamps are guaranteed by this CTC output. Do not synthesize them or replace the app's current Whisper word alignment without separate evaluation.
