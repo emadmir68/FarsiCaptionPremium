@@ -126,10 +126,22 @@ std::string transcribe(Engine & engine,const std::string & path,const std::strin
     p.abort_callback=abort_callback;
     p.abort_callback_user_data=&engine;
     std::string segments;
+    std::vector<std::pair<int,int>> windows;
     for(int r=0;r<whisper_vad_segments_n_segments(ranges.get());++r) {
         const int first=std::clamp(static_cast<int>(std::lround(whisper_vad_segments_get_segment_t0(ranges.get(),r)*160)),0,static_cast<int>(audio.size()));
         const int last=std::clamp(static_cast<int>(std::lround(whisper_vad_segments_get_segment_t1(ranges.get(),r)*160)),first,static_cast<int>(audio.size()));
         if(last<=first) continue;
+#if defined(CAPTION_BENCHMARK_MERGE_VAD) && !defined(__ANDROID__)
+        // Experiment: keep original audio across short pauses for sentence context.
+        if(language=="fa" && !windows.empty() && first-windows.back().second<=16000 && last-windows.back().first<=28*16000) {
+            windows.back().second=last;
+            continue;
+        }
+#endif
+        windows.emplace_back(first,last);
+    }
+    for(const auto & window:windows) {
+        const int first=window.first,last=window.second;
         const int64_t offset=first/16, limit=last/16;
         if(engine.cancelled) throw std::runtime_error("Cancelled");
         if(whisper_full(engine.ctx,p,audio.data()+first,last-first)!=0) throw std::runtime_error("Native transcription failed or cancelled");
