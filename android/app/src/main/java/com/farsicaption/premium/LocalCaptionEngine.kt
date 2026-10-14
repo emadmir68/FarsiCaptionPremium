@@ -67,11 +67,20 @@ class LocalCaptionEngine(private val context: Context) {
             val raw = try { decode(initial, audio, vad, language, onStatus) }
             catch (e: Exception) {
                 checkCancelled()
-                if (initial != TURBO_MODEL) throw e
-                onStatus("حافظه برای مدل کامل کافی نبود یا اجرا ناموفق بود؛ اجرای Turbo کم‌حجم…")
-                ensureModel(COMPACT_MODEL, onStatus, onModelProgress)
-                selected = COMPACT_MODEL
-                decode(COMPACT_MODEL, audio, vad, language, onStatus)
+                if (initial == SMALL_MODEL) throw e
+                val fallback = if (initial == TURBO_MODEL) COMPACT_MODEL else SMALL_MODEL
+                onStatus("اجرای مدل اصلی ناموفق بود؛ تلاش با ${fallback.label}…")
+                ensureModel(fallback, onStatus, onModelProgress)
+                selected = fallback
+                try { decode(fallback, audio, vad, language, onStatus) }
+                catch (fallbackError: Exception) {
+                    checkCancelled()
+                    if (fallback == SMALL_MODEL) throw fallbackError
+                    onStatus("حافظه کافی برای Turbo نیست؛ تلاش با Whisper Small…")
+                    ensureModel(SMALL_MODEL, onStatus, onModelProgress)
+                    selected = SMALL_MODEL
+                    decode(SMALL_MODEL, audio, vad, language, onStatus)
+                }
             }
             checkCancelled()
             val root = JSONObject(raw)
