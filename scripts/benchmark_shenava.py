@@ -47,9 +47,9 @@ def scores(reference, hypothesis):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)\n    parser.add_argument("--self-test", action="store_true", help="Run metric/normalization regression tests and exit")
+    parser.add_argument("--model-dir", type=Path)
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--output", type=Path)\n    parser.add_argument("--self-test", action="store_true", help="Run metric/normalization regression tests and exit")
     parser.add_argument("--threads", type=int, default=2)
     args = parser.parse_args()
     model = args.model_dir
