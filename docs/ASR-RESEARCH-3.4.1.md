@@ -10,6 +10,7 @@ Candidates, each compared independently with production:
 
 1. Keep the exact Turbo Q5 model and beam 5. Join adjacent external-VAD ranges only if the original gap is at most 1.0 s and the resulting window is at most 28.0 s. Preserve the original samples, including the gap; never concatenate speech or compress time. No language prompt/context is carried across windows. Experimental change is host-only and Persian-only.
 2. Keep baseline VAD/decoder settings and substitute vhdm/whisper-large-fa-v1, revision 95485391406953c01ffc06724af5a08cb517a325 (MIT). Convert from its safetensors using the pinned upstream whisper.cpp conversion mapping and quantize with that upstream revision to Q5_0. This is a separate candidate, not a combination with candidate 1. Model-card scores are not used as our measurements.
+3. Added before any fresh-test decoding: givia/whisper-large-v3-turbo-persian, revision 9626d38558f04c02f480b702c9db740eea567911 (CC-BY-4.0), supplied GGML FP16 quantized to Q5_0 using the same pinned engine. Baseline VAD/decoder settings are retained. This author's training includes conversational speech; its own scores are not our evidence. Its checkpoint selection used FLEURS-dev, so development performance is not an independent validation of this candidate.
 
 Selection: a candidate must strictly improve dev WER, not increase dev CER or empty outputs, and have valid segment bounds. Compare the best qualifying candidate (lowest dev WER, then CER) against baseline on 20 fresh FLEURS test recordings. These are the first 20 distinct transcript IDs in the archive after excluding every ID in the old 20-clip manifest. Do not tune on the fresh test. Reject if aggregate test WER, CER or empty outputs increase. Also check silence, repeated speech separated by silence, and the supplied private video. No WER is assigned to that video without a verified transcript.
 
@@ -28,3 +29,7 @@ The new test references are fixed before recognition. Data provenance and attrib
 The supplied video is stereo, 48 kHz AAC. Decoded channel correlation is about 0.82 and the mono downmix is about -24.1 dBFS RMS, with no clipped samples in the decoded inspection. Phase cancellation is not the observed cause in this clip. Existing timestamp-preserving 16 kHz extraction is retained. No speculative equalization or noise removal is applied.
 
 Results will be appended after the controlled runs.
+
+## Durable execution
+
+Incomplete local experiments were lost after the workspace was restored to an earlier snapshot; they are not reported as completed results. The controlled evaluation now runs in GitHub Actions. All four development arms must finish before the fixed selection rule runs. Only baseline and the selected candidate see the fresh test. Raw public hypotheses, reference manifests, model hashes, timings and logs are retained as Actions artifacts. No user audio or private transcript is uploaded. Android production behavior remains unchanged until the gates pass. Synthetic non-speech and repeat controls plus an independent conversational evaluation remain required before a fine-tune becomes the default.

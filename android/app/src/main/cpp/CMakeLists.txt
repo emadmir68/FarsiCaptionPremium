@@ -45,4 +45,11 @@ else()
     target_link_libraries(asr_batch PRIVATE caption_core)
     add_executable(asr_probe asr_probe.cpp)
     target_link_libraries(asr_probe PRIVATE caption_core)
+    # Reproducible research conversion using this same pinned ggml implementation.
+    add_executable(whisper_quantize EXCLUDE_FROM_ALL
+        ${WHISPER_SOURCE_DIR}/examples/quantize/quantize.cpp
+        ${WHISPER_SOURCE_DIR}/examples/common.cpp
+        ${WHISPER_SOURCE_DIR}/examples/common-ggml.cpp)
+    target_include_directories(whisper_quantize PRIVATE ${WHISPER_SOURCE_DIR}/examples)
+    target_link_libraries(whisper_quantize PRIVATE whisper)
 endif()

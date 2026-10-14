@@ -1,0 +1,107 @@
+name: Persian ASR controlled evaluation
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/persian-asr-repair]
+    paths:
+      - '.github/workflows/asr-research.yml'
+      - 'scripts/research_asr.py'
+permissions:
+  contents: read
+jobs:
+  development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [baseline, merged, vhdm, givia]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install evaluation dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          pip install numpy==2.2.6 safetensors==0.6.2
+      - name: Build pinned production engine
+        env:
+          ARM: ${{ matrix.arm }}
+        run: |
+          MERGE=OFF
+          if [ "$ARM" = merged ]; then MERGE=ON; fi
+          cmake -S android/app/src/main/cpp -B research-build -DCMAKE_BUILD_TYPE=Release -DCAPTION_BENCHMARK_MERGE_VAD="$MERGE"
+          cmake --build research-build --target asr_batch whisper_quantize native_tests --parallel 4
+          ctest --test-dir research-build --output-on-failure
+      - name: Evaluate ten development recordings
+        env:
+          ARM: ${{ matrix.arm }}
+        run: python scripts/research_asr.py run "$ARM" dev research-work research-build > research.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-${{ matrix.arm }}
+          path: |
+            research-work/evidence/
+            research.log
+          retention-days: 30
+  selection:
+    needs: development
+    runs-on: ubuntu-latest
+    outputs:
+      winner: ${{ steps.select.outputs.winner }}
+      arms: ${{ steps.select.outputs.arms }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dev-*
+          path: development
+      - name: Apply predeclared development gate
+        id: select
+        run: python3 scripts/research_asr.py select development selection.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-selection
+          path: selection.json
+  held-out:
+    needs: selection
+    if: needs.selection.outputs.winner != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: ${{ fromJSON(needs.selection.outputs.arms) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install evaluation dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          pip install numpy==2.2.6 safetensors==0.6.2
+      - name: Build pinned production engine
+        env:
+          ARM: ${{ matrix.arm }}
+        run: |
+          MERGE=OFF
+          if [ "$ARM" = merged ]; then MERGE=ON; fi
+          cmake -S android/app/src/main/cpp -B research-build -DCMAKE_BUILD_TYPE=Release -DCAPTION_BENCHMARK_MERGE_VAD="$MERGE"
+          cmake --build research-build --target asr_batch whisper_quantize --parallel 4
+      - name: Evaluate twenty fresh test recordings
+        env:
+          ARM: ${{ matrix.arm }}
+        run: python scripts/research_asr.py run "$ARM" test research-work research-build > research.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-${{ matrix.arm }}
+          path: |
+            research-work/evidence/
+            research.log
+          retention-days: 30
