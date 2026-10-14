@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("app.cash.paparazzi")
 }
 
 val stableDevKeystore = rootProject.file("signing/farsi-caption-dev.jks")
@@ -16,8 +17,8 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         minSdk = 26
         targetSdk = 35
-        versionCode = 44
-        versionName = "3.3.2-ultra"
+        versionCode = 45
+        versionName = "3.4.0-studio"
     }
 
     signingConfigs {

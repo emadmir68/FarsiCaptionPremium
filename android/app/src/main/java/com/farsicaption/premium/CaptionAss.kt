@@ -1,4 +1,5 @@
 package com.farsicaption.premium
+import kotlin.math.roundToInt
 
 internal object CaptionAss {
     fun build(
@@ -41,7 +42,7 @@ internal object CaptionAss {
         }
 
         val scale = frameHeight / 1920.0
-        val scaledFontSize = CaptionStyle.fontPixels(fontSize.toFloat(), frameHeight.toFloat()).toInt()
+        val scaledFontSize = CaptionStyle.fontPixels(fontSize.toFloat(), frameWidth.toFloat(), frameHeight.toFloat()).roundToInt()
         val scaledMargin = CaptionStyle.marginPixels(marginV.toFloat(), frameHeight.toFloat()).toInt()
         val scaledSideMargin = (60 * scale).toInt().coerceAtLeast(8)
         val scaledOutline = (outline * scale).toInt().coerceAtLeast(1)

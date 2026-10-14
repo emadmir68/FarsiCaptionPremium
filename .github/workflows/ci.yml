@@ -74,6 +74,7 @@ jobs:
           path: |
             android/app/build/test-results/
             android/app/build/reports/render-fixtures/
+            android/app/build/reports/paparazzi/
             native-build/Testing/Temporary/LastTest.log
       - name: Publish matching version
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

@@ -1,12 +1,8 @@
-Version 3.3.2-ultra (44), arm64-v8a / Android 8+. Follow-up to a user-supplied source clip and rendered result.
+Version 3.4.0-studio (45), arm64-v8a / Android 8+.
 
-- Quality mode never automatically falls back to Small. It uses full Turbo with enough memory, otherwise verified Turbo Q5 (~548 MB download). Small is available only through the explicit lightweight choice.
-- Preserve the model name in the completed job status. A downloaded model or "ready" label is not an accuracy guarantee.
-- Preserve delayed audio and timestamp gaps during extraction. Real ffmpeg regression fixtures cover zero offset, delayed audio and an internal gap.
-- Use the video aspect ratio in the preview, the bundled Persian font, and the same relative font size / bottom margin in preview and export. Extend the font control through 110 and provide a readable-size shortcut without erasing saved preferences.
-- Balance aligned caption groups instead of splitting six words into five plus one, preserve pauses, and enable line wrapping in export.
-- applicationId, update-signing certificate, project data and previous releases remain unchanged.
+- A refreshed Persian studio interface: ink / lilac / turquoise palette, consistent Vazirmatn type, compact video preview, clearer import and resume actions, and caption-by-caption editing without the old 60-caption limit.
+- Independent landscape font preference. 16:9 captions use a larger shared preview/export scale; the new landscape default is 81 px at 1080p instead of the previous 43 px. Portrait preferences remain intact. Landscape size can be adjusted separately through 150.
+- Quality remains offline Turbo / Turbo Q5. Recognition settings are evaluated against a reproducible Persian reference corpus; no unproven decoder change is promoted just because the build passes.
+- Existing application ID, signing certificate, saved projects and model downloads are retained.
 
-Important result: recognition errors were reproduced on the supplied real clip. Turbo, Turbo Q5 and the full Large-v3 comparison did NOT establish accurate recognition of this sample. An experimental Persian fine-tune omitted most speech and was rejected. This release fixes demonstrated selection, timing and presentation defects; it is NOT a claim that the sample's ASR is solved. No dictionary guesses or replacement transcript is injected.
-
-CI gates: native contract, 53 Kotlin unit/regression tests, real ffmpeg timeline tests, release APK build, application/version checks and signing-certificate match. Physical Android inference/thermal performance and end-to-end device lifecycle remain untested. User media and recognition text are not published in the repository.
+Validation details and ASR benchmark results will be recorded before release. Physical-device performance and accuracy on arbitrary colloquial videos cannot be inferred from desktop tests.

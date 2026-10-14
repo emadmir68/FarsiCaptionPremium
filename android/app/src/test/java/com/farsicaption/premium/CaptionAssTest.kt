@@ -20,10 +20,11 @@ class CaptionAssTest {
         File(dir,"portrait-large.ass").writeText(ass)
     }
     @Test fun landscapeScalesToActualHeight() {
-        val ass=build(1920,1080)
+        val ass=build(1920,1080,90)
         assertTrue(ass.contains("PlayResX: 1920\nPlayResY: 1080"))
-        assertTrue(ass.contains("Style: Premium,Vazirmatn,43,"))
+        assertTrue(ass.contains("Style: Premium,Vazirmatn,81,"))
         File("build/reports/render-fixtures").mkdirs()
         File("build/reports/render-fixtures/landscape.ass").writeText(ass)
+        File("build/reports/render-fixtures/landscape-large.ass").writeText(build(1920,1080,150))
     }
 }

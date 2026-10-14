@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -106,16 +107,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
-private val Ink = Color(0xFF08090D)
-private val Panel = Color(0xFF12141C)
-private val Panel2 = Color(0xFF1A1D28)
-private val Gold = Color(0xFFFFCC66)
-private val GoldSoft = Color(0xFFFFE2A6)
-private val Mint = Color(0xFF83F5C8)
-private val TextPrimary = Color(0xFFF8F7F2)
-private val TextMuted = Color(0xFF9A9EAA)
-private val Stroke = Color(0xFF2A2E3B)
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -167,12 +158,13 @@ private fun PremiumCaptionApp() {
     var maxWords by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("maxWords", 5f)) }
     var preset by rememberSaveable { mutableStateOf(editorSettings.getString("preset", "luxury") ?: "luxury") }
     var fontSize by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("fontSize", CaptionStyle.DEFAULT_FONT)) }
+    var landscapeFontSize by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("landscapeFontSize", CaptionStyle.DEFAULT_LANDSCAPE_FONT)) }
     var marginV by rememberSaveable { mutableFloatStateOf(editorSettings.getFloat("marginV", 120f)) }
     var textColorKey by rememberSaveable { mutableStateOf(editorSettings.getString("textColor", "cream") ?: "cream") }
     var backgroundKey by rememberSaveable { mutableStateOf(editorSettings.getString("background", "none") ?: "none") }
-    LaunchedEffect(maxWords, preset, fontSize, marginV, textColorKey, backgroundKey) {
+    LaunchedEffect(maxWords, preset, fontSize, landscapeFontSize, marginV, textColorKey, backgroundKey) {
         editorSettings.edit().putFloat("maxWords", maxWords).putString("preset", preset)
-            .putFloat("fontSize", fontSize).putFloat("marginV", marginV)
+            .putFloat("fontSize", fontSize).putFloat("landscapeFontSize", landscapeFontSize).putFloat("marginV", marginV)
             .putString("textColor", textColorKey).putString("background", backgroundKey).apply()
     }
     LaunchedEffect(sourceString, activeJobId) {
@@ -222,16 +214,7 @@ private fun PremiumCaptionApp() {
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme.copy(
-                background = Ink,
-                surface = Panel,
-                primary = Gold,
-                onPrimary = Ink,
-                onBackground = TextPrimary,
-                onSurface = TextPrimary,
-            )
-        ) {
+        StudioTheme {
             Surface(Modifier.fillMaxSize(), color = Ink) {
                 if (sourceUri == null) {
                     HomeScreen(
@@ -262,6 +245,7 @@ private fun PremiumCaptionApp() {
                         maxWords = maxWords,
                         preset = preset,
                         fontSize = fontSize,
+                        landscapeFontSize = landscapeFontSize,
                         marginV = marginV,
                         textColorKey = textColorKey,
                         backgroundKey = backgroundKey,
@@ -277,6 +261,7 @@ private fun PremiumCaptionApp() {
                         onMaxWords = { maxWords = it },
                         onPreset = { preset = it },
                         onFontSize = { fontSize = it },
+                        onLandscapeFontSize = { landscapeFontSize = it },
                         onMarginV = { marginV = it },
                         onTextColor = { textColorKey = it },
                         onBackground = { backgroundKey = it },
@@ -326,6 +311,7 @@ private fun PremiumCaptionApp() {
                                             captions = captions,
                                             preset = preset,
                                             fontSize = fontSize.roundToInt(),
+                                            landscapeFontSize = landscapeFontSize.roundToInt(),
                                             marginV = marginV.roundToInt(),
                                             textColorKey = textColorKey,
                                             backgroundKey = backgroundKey,
@@ -357,171 +343,6 @@ private fun PremiumCaptionApp() {
 }
 
 @Composable
-private fun HomeScreen(
-    modelReady: Boolean,
-    engineLabel: String,
-    engineDownload: String,
-    onPickVideo: () -> Unit,
-    canResume: Boolean,
-    onResume: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF08090D), Color(0xFF10131B), Color(0xFF08090D))
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 22.dp, vertical = 18.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    color = Gold.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.32f)),
-                ) {
-                    Text(
-                        "FA CAPTION AI",
-                        color = GoldSoft,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                Surface(
-                    color = if (modelReady) Mint.copy(alpha = 0.12f) else Gold.copy(alpha = 0.10f),
-                    shape = RoundedCornerShape(50),
-                ) {
-                    Text(
-                        if (modelReady) "OFFLINE READY" else "NO TOKEN",
-                        color = if (modelReady) Mint else GoldSoft,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            Text(
-                "صدای تو،\nبا کپشن حرفه‌ای.",
-                color = TextPrimary,
-                fontSize = 38.sp,
-                lineHeight = 45.sp,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                "Auto Caption مخصوص فارسی؛ بدون App Token و بدون Backend. پردازش روی خود گوشی انجام می‌شود.",
-                color = TextMuted,
-                fontSize = 16.sp,
-                lineHeight = 26.sp,
-            )
-
-            PremiumImportCard(onPickVideo)
-            if (canResume) OutlinedButton(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
-                Text("ادامهٔ پروژهٔ قبلی", color = GoldSoft)
-            }
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FeaturePill("فارسی و عربی")
-                FeaturePill("بدون توکن")
-                FeaturePill("آفلاین")
-                FeaturePill("RTL فارسی")
-                FeaturePill("خروجی MP4")
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Panel),
-                shape = RoundedCornerShape(26.dp),
-                border = BorderStroke(1.dp, Stroke),
-            ) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Premium Engine • Adaptive Accuracy", color = GoldSoft, fontWeight = FontWeight.Bold)
-                    EngineRow("01", engineLabel, "مدل پیش‌فرض با توجه به حافظه • دانلود $engineDownload")
-                    EngineRow("02", "Persian Clean Audio", "تشخیص بخش‌های گفتار با حفظ صدای اصلی")
-                    EngineRow("03", "Project Editing", "ویرایش‌های دستی برای همین پروژه ذخیره می‌شوند")
-                    EngineRow("04", "Luxury Editor", "Drag کپشن، رنگ، پس‌زمینه، اندازه و استایل زنده")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PremiumImportCard(onPickVideo: () -> Unit) {
-    Card(
-        onClick = onPickVideo,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF171A24)),
-        shape = RoundedCornerShape(30.dp),
-        border = BorderStroke(1.dp, Gold.copy(alpha = 0.28f)),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(54.dp)
-                    .clip(CircleShape)
-                    .background(Gold),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("+", color = Ink, fontSize = 30.sp, fontWeight = FontWeight.Black)
-            }
-            Text("ویدیو را وارد کن", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("MP4 • MOV • WebM", color = TextMuted, fontSize = 13.sp)
-            Button(
-                onClick = onPickVideo,
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("انتخاب ویدیو", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 5.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeaturePill(text: String) {
-    Surface(
-        color = Panel2,
-        shape = RoundedCornerShape(50),
-        border = BorderStroke(1.dp, Stroke),
-    ) {
-        Text(text, color = TextPrimary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
-    }
-}
-
-@Composable
-private fun EngineRow(number: String, title: String, detail: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(number, color = Gold, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.width(34.dp))
-        Column {
-            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-            Text(detail, color = TextMuted, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
 private fun EditorScreen(
     sourceUri: Uri,
     captions: List<CaptionItem>,
@@ -535,6 +356,7 @@ private fun EditorScreen(
     maxWords: Float,
     preset: String,
     fontSize: Float,
+    landscapeFontSize: Float,
     marginV: Float,
     textColorKey: String,
     backgroundKey: String,
@@ -545,6 +367,7 @@ private fun EditorScreen(
     onMaxWords: (Float) -> Unit,
     onPreset: (String) -> Unit,
     onFontSize: (Float) -> Unit,
+    onLandscapeFontSize: (Float) -> Unit,
     onMarginV: (Float) -> Unit,
     onTextColor: (String) -> Unit,
     onBackground: (String) -> Unit,
@@ -553,7 +376,11 @@ private fun EditorScreen(
     onTranscribe: (String, String) -> Unit,
     onExport: () -> Unit,
 ) {
-    var tab by remember { mutableStateOf("text") }
+    var tab by rememberSaveable { mutableStateOf("text") }
+    var videoRatio by remember(sourceUri) { mutableFloatStateOf(9f / 16f) }
+    val landscape = videoRatio > 1f
+    val activeFont = if (landscape) landscapeFontSize else fontSize
+    val setActiveFont = if (landscape) onLandscapeFontSize else onFontSize
     val activeCaption = captions.lastOrNull { currentPosition in it.start..it.end }
     val displayText = activeCaption?.text.orEmpty()
 
@@ -569,16 +396,16 @@ private fun EditorScreen(
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onBack) { Text("‹ پروژه‌ها", color = TextMuted) }
+                TextButton(onClick = onBack) { Text("خانه", color = TextMuted) }
                 Spacer(Modifier.weight(1f))
-                Text("Farsi Caption", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("استودیوی کپشن", color = TextPrimary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 Surface(
                     color = Mint.copy(alpha = 0.10f),
                     shape = RoundedCornerShape(50),
                 ) {
                     Text(
-                        "OFFLINE",
+                        "آفلاین",
                         color = Mint,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -607,7 +434,7 @@ private fun EditorScreen(
                     Button(
                         onClick = onExport,
                         enabled = captions.isNotEmpty() && !isExporting,
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.weight(0.62f),
                     ) {
@@ -633,7 +460,9 @@ private fun EditorScreen(
                 uri = sourceUri,
                 captionText = displayText,
                 preset = preset,
-                fontSize = fontSize,
+                fontSize = activeFont,
+                videoRatio = videoRatio,
+                onVideoRatio = { videoRatio = it },
                 marginV = marginV,
                 textColorKey = textColorKey,
                 backgroundKey = backgroundKey,
@@ -649,15 +478,15 @@ private fun EditorScreen(
                         LinearProgressIndicator(
                             progress = { modelProgress / 100f },
                             modifier = Modifier.fillMaxWidth(),
-                            color = Gold,
+                            color = Accent,
                             trackColor = Panel2,
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text("دانلود موتور فارسی: $modelProgress٪", color = GoldSoft, fontSize = 12.sp)
+                        Text("دانلود موتور فارسی: $modelProgress٪", color = AccentSoft, fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Gold,
+                            color = Accent,
                             trackColor = Panel2,
                         )
                     }
@@ -669,7 +498,7 @@ private fun EditorScreen(
             }
 
             if (captions.isEmpty()) {
-                AutoCaptionPanel(maxWords, onMaxWords, onTranscribe)
+                AutoCaptionPanel(maxWords, onMaxWords, onTranscribe, enabled = !isTranscribing)
             } else {
                 TimelineStrip(captions, selectedIndex, currentPosition, onSelectCaption)
                 EditorTabs(tab) { tab = it }
@@ -678,12 +507,13 @@ private fun EditorScreen(
                     "text" -> TextEditor(captions, selectedIndex, onSelectCaption, onEditCaption)
                     "style" -> StyleEditor(
                         preset = preset,
-                        fontSize = fontSize,
+                        fontSize = activeFont,
+                        landscape = landscape,
                         marginV = marginV,
                         textColorKey = textColorKey,
                         backgroundKey = backgroundKey,
                         onPreset = onPreset,
-                        onFontSize = onFontSize,
+                        onFontSize = setActiveFont,
                         onMarginV = onMarginV,
                         onTextColor = onTextColor,
                         onBackground = onBackground,
@@ -702,6 +532,8 @@ private fun VideoStage(
     captionText: String,
     preset: String,
     fontSize: Float,
+    videoRatio: Float,
+    onVideoRatio: (Float) -> Unit,
     marginV: Float,
     textColorKey: String,
     backgroundKey: String,
@@ -718,7 +550,7 @@ private fun VideoStage(
         }
     }
 
-    var videoRatio by remember(uri) { mutableFloatStateOf(9f / 16f) }
+    val updateRatio by rememberUpdatedState(onVideoRatio)
     val density = LocalDensity.current
     val currentMargin by rememberUpdatedState(marginV)
     val captionFont = remember {
@@ -727,7 +559,7 @@ private fun VideoStage(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(size: VideoSize) {
-                if (size.width > 0 && size.height > 0) videoRatio = size.width * size.pixelWidthHeightRatio / size.height
+                if (size.width > 0 && size.height > 0) updateRatio(size.width * size.pixelWidthHeightRatio / size.height)
             }
         }
         player.addListener(listener)
@@ -749,11 +581,11 @@ private fun VideoStage(
         }
     }
 
-    BoxWithConstraints(
-        Modifier.fillMaxWidth().background(Color.Black).aspectRatio(videoRatio.coerceIn(0.2f, 5f)),
-    ) {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+      val stageWidth = minOf(maxWidth, 360.dp * videoRatio.coerceIn(0.2f, 5f))
+      BoxWithConstraints(Modifier.width(stageWidth).aspectRatio(videoRatio.coerceIn(0.2f, 5f)).clip(RoundedCornerShape(22.dp)).background(Color.Black)) {
         val previewHeightPx = with(density) { maxHeight.toPx() }
-        val previewFontSize = with(density) { CaptionStyle.fontPixels(fontSize, previewHeightPx).toSp() }
+        val previewFontSize = with(density) { CaptionStyle.fontPixels(fontSize, with(density) { maxWidth.toPx() }, previewHeightPx).toSp() }
         val previewMargin = with(density) { CaptionStyle.marginPixels(marginV, previewHeightPx).toDp() }
         AndroidView(
             factory = { PlayerView(it).apply { this.player = player; useController = true; setShutterBackgroundColor(android.graphics.Color.BLACK) } },
@@ -778,13 +610,15 @@ private fun VideoStage(
             )
         }
     }
+  }
 }
 
 @Composable
-private fun AutoCaptionPanel(
+internal fun AutoCaptionPanel(
     maxWords: Float,
     onMaxWords: (Float) -> Unit,
     onTranscribe: (String, String) -> Unit,
+    enabled: Boolean = true,
 ) {
     val preferences = LocalContext.current.getSharedPreferences("editor_settings", Context.MODE_PRIVATE)
     var speechLanguage by rememberSaveable { mutableStateOf(preferences.getString("speechLanguage", "fa") ?: "fa") }
@@ -801,9 +635,9 @@ private fun AutoCaptionPanel(
             .fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Auto Caption فارسی", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Text("زیرنویس خودکار", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
             Text(
-                "حالت کیفیت از Turbo استفاده می‌کند؛ با حافظهٔ کمتر نسخهٔ کم‌حجم آن اجرا می‌شود. Small فقط در حالت سبک انتخاب می‌شود. همهٔ مدل‌ها پس از دانلود، آفلاین کار می‌کنند.",
+                "زبان و کیفیت را انتخاب کن. پردازش روی گوشی انجام می‌شود؛ مدل فقط بار اول دانلود می‌شود.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
@@ -822,10 +656,11 @@ private fun AutoCaptionPanel(
                     OutlinedButton(onClick = { mode = key }) { Text(if (mode == key) "✓ $label" else label) }
                 }
             }
-            if (mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = GoldSoft, fontSize = 12.sp)
+            if (mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = AccentSoft, fontSize = 12.sp)
             Button(
                 onClick = { onTranscribe(speechLanguage, mode) },
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+                enabled = enabled,
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                 shape = RoundedCornerShape(17.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -844,18 +679,18 @@ private fun TimelineStrip(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Timeline", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text("خط زمان", color = TextPrimary, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            Text(formatTime(currentPosition), color = GoldSoft, fontSize = 12.sp)
+            Text(formatTime(currentPosition), color = AccentSoft, fontSize = 12.sp)
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             item { Spacer(Modifier.width(8.dp)) }
             itemsIndexed(captions) { index, caption ->
                 val active = index == selectedIndex || currentPosition in caption.start..caption.end
                 Surface(
-                    color = if (active) Gold.copy(alpha = 0.16f) else Panel,
+                    color = if (active) Accent.copy(alpha = 0.16f) else Panel,
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, if (active) Gold.copy(alpha = 0.55f) else Stroke),
+                    border = BorderStroke(1.dp, if (active) Accent.copy(alpha = 0.55f) else Stroke),
                     modifier = Modifier
                         .width(150.dp)
                         .clickable { onSelect(index) },
@@ -882,7 +717,7 @@ private fun EditorTabs(tab: String, onTab: (String) -> Unit) {
             .background(Panel),
     ) {
         TabButton("متن", "text", tab, onTab, Modifier.weight(1f))
-        TabButton("استایل", "style", tab, onTab, Modifier.weight(1f))
+        TabButton("ظاهر", "style", tab, onTab, Modifier.weight(1f))
         TabButton("زمان", "timing", tab, onTab, Modifier.weight(1f))
     }
 }
@@ -900,54 +735,50 @@ private fun TabButton(
         modifier
             .padding(4.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(if (active) Panel2 else Color.Transparent)
+            .background(if (active) Accent.copy(alpha = 0.16f) else Color.Transparent)
             .clickable { onTab(key) }
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (active) GoldSoft else TextMuted, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+        Text(label, color = if (active) AccentSoft else TextMuted, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
     }
 }
 
 @Composable
-private fun TextEditor(
-    captions: List<CaptionItem>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    onEdit: (Int, String) -> Unit,
+internal fun TextEditor(
+    captions: List<CaptionItem>, selectedIndex: Int,
+    onSelect: (Int) -> Unit, onEdit: (Int, String) -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("ویرایش متن", color = TextPrimary, fontWeight = FontWeight.Bold)
-        captions.take(60).forEachIndexed { index, caption ->
-            val active = selectedIndex == index
-            OutlinedTextField(
-                value = caption.text,
-                onValueChange = { onEdit(index, it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSelect(index) },
-                label = { Text(formatTime(caption.start)) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedBorderColor = Gold,
-                    unfocusedBorderColor = if (active) Gold.copy(alpha = 0.5f) else Stroke,
-                    focusedLabelColor = GoldSoft,
-                    unfocusedLabelColor = TextMuted,
-                    cursorColor = Gold,
-                ),
-                shape = RoundedCornerShape(16.dp),
-                minLines = 1,
-                maxLines = 3,
-            )
+    val caption = captions.getOrNull(selectedIndex) ?: return
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("ویرایش کپشن", color = TextPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("${selectedIndex + 1} از ${captions.size}", color = Mint, fontSize = 12.sp)
+        }
+        OutlinedTextField(
+            value = caption.text, onValueChange = { onEdit(selectedIndex, it) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("${formatTime(caption.start)} تا ${formatTime(caption.end)}") },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary,
+                focusedBorderColor = Accent, unfocusedBorderColor = Stroke,
+                focusedLabelColor = AccentSoft, unfocusedLabelColor = TextMuted, cursorColor = Accent,
+            ),
+            shape = RoundedCornerShape(20.dp), minLines = 2, maxLines = 5,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { onSelect(selectedIndex - 1) }, enabled = selectedIndex > 0, modifier = Modifier.weight(1f)) { Text("کپشن قبلی") }
+            OutlinedButton(onClick = { onSelect(selectedIndex + 1) }, enabled = selectedIndex < captions.lastIndex, modifier = Modifier.weight(1f)) { Text("کپشن بعدی") }
         }
     }
 }
 
 @Composable
-private fun StyleEditor(
+internal fun StyleEditor(
     preset: String,
     fontSize: Float,
+    landscape: Boolean = false,
     marginV: Float,
     textColorKey: String,
     backgroundKey: String,
@@ -958,36 +789,36 @@ private fun StyleEditor(
     onBackground: (String) -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("استایل کپشن", color = TextPrimary, fontWeight = FontWeight.Bold)
+        Text("ظاهر زیرنویس", color = TextPrimary, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             itemsIndexed(
                 listOf(
-                    "luxury" to "Luxury",
-                    "bold" to "Bold",
-                    "minimal" to "Minimal",
-                    "neon" to "Neon",
-                    "glass" to "Glass",
+                    "luxury" to "طلایی",
+                    "bold" to "درشت",
+                    "minimal" to "ساده",
+                    "neon" to "نئون",
+                    "glass" to "شیشه‌ای",
                 )
             ) { _, item ->
                 val active = preset == item.first
                 Surface(
-                    color = if (active) Gold.copy(alpha = 0.16f) else Panel,
+                    color = if (active) Accent.copy(alpha = 0.16f) else Panel,
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, if (active) Gold else Stroke),
+                    border = BorderStroke(1.dp, if (active) Accent else Stroke),
                     modifier = Modifier.clickable { onPreset(item.first) },
                 ) {
                     Text(
                         item.second,
-                        color = if (active) GoldSoft else TextPrimary,
+                        color = if (active) AccentSoft else TextPrimary,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         fontWeight = FontWeight.Bold,
                     )
                 }
             }
         }
-        TextButton(onClick = { onFontSize(CaptionStyle.DEFAULT_FONT) }) { Text("اندازهٔ خوانا برای موبایل", color = GoldSoft) }
-        Text("اندازه متن: ${fontSize.roundToInt()}", color = TextMuted, fontSize = 12.sp)
-        Slider(value = fontSize, onValueChange = onFontSize, valueRange = CaptionStyle.MIN_FONT..CaptionStyle.MAX_FONT)
+        TextButton(onClick = { onFontSize(CaptionStyle.defaultFont(landscape)) }) { Text(if (landscape) "اندازهٔ پیشنهادی برای ویدیوی افقی" else "اندازهٔ پیشنهادی برای ویدیوی عمودی", color = AccentSoft) }
+        Text("اندازهٔ متن ${if (landscape) "افقی" else "عمودی"}: ${fontSize.roundToInt()}", color = TextMuted, fontSize = 12.sp)
+        Slider(value = fontSize, onValueChange = onFontSize, valueRange = CaptionStyle.MIN_FONT..CaptionStyle.maxFont(landscape))
 
         Text("رنگ متن", color = TextPrimary, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -1015,7 +846,7 @@ private fun StyleEditor(
         }
 
         Text("فاصله از پایین: ${marginV.roundToInt()}", color = TextMuted, fontSize = 12.sp)
-        Slider(value = marginV, onValueChange = onMarginV, valueRange = 50f..300f)
+        Slider(value = marginV, onValueChange = onMarginV, valueRange = CaptionStyle.MIN_MARGIN..CaptionStyle.MAX_MARGIN)
     }
 }
 
@@ -1046,7 +877,7 @@ private val captionBackgrounds = listOf(
 )
 
 private fun captionTextColor(key: String): Color =
-    captionTextColors.firstOrNull { it.key == key }?.color ?: GoldSoft
+    captionTextColors.firstOrNull { it.key == key }?.color ?: Color(0xFFFFE2A6)
 
 private fun captionBackgroundColor(key: String): Color =
     captionBackgrounds.firstOrNull { it.key == key }?.color ?: Color.Transparent
@@ -1060,9 +891,9 @@ private fun CaptionColorChip(
     transparent: Boolean = false,
 ) {
     Surface(
-        color = if (selected) Gold.copy(alpha = 0.12f) else Panel,
+        color = if (selected) Accent.copy(alpha = 0.12f) else Panel,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (selected) Gold else Stroke),
+        border = BorderStroke(1.dp, if (selected) Accent else Stroke),
         modifier = Modifier.clickable(onClick = onClick),
     ) {
         Row(
@@ -1081,7 +912,7 @@ private fun CaptionColorChip(
                     Text("×", color = TextMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            Text(label, color = if (selected) GoldSoft else TextPrimary, fontSize = 11.sp)
+            Text(label, color = if (selected) AccentSoft else TextPrimary, fontSize = 11.sp)
         }
     }
 }
@@ -1102,10 +933,10 @@ private fun TimingPanel(captions: List<CaptionItem>, selectedIndex: Int) {
             if (caption != null) {
                 Text("شروع: ${formatTime(caption.start)}", color = TextMuted)
                 Text("پایان: ${formatTime(caption.end)}", color = TextMuted)
-                Text("کلمات زمان‌بندی‌شده: ${caption.words.size}", color = GoldSoft)
+                Text("کلمات زمان‌بندی‌شده: ${caption.words.size}", color = AccentSoft)
             }
             Text(
-                "نسخه آفلاین زمان قطعه گفتار را از Whisper می‌گیرد و کلمات را داخل همان بازه همگام می‌کند.",
+                "با انتخاب هر کپشن از خط زمان، همان بخش ویدیو پخش می‌شود.",
                 color = TextMuted,
                 fontSize = 12.sp,
                 lineHeight = 19.sp,
