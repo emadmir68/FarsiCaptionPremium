@@ -36,4 +36,26 @@ python3 scripts/report_fa_benchmark.py /tmp/farsi-benchmark/manifest.json dev /t
 python3 scripts/report_fa_benchmark.py /tmp/farsi-benchmark/manifest.json dev /tmp/farsi-benchmark/beam8-dev
 ```
 
-Results and decision are recorded below after the completed runs.
+## Results and release decision
+
+| Split | Decoder | Word errors / words | WER | Character errors / characters | CER | Empty outputs | Invalid segment times |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Development, 10 clips | Beam 5 | 56 / 234 | 23.93% | 74 / 905 | 8.18% | 0 | 0 |
+| Development, 10 clips | Beam 8 | 50 / 234 | 21.37% | 66 / 905 | 7.29% | 0 | 0 |
+| Held-out test, 10 clips | Beam 5 | 46 / 235 | 19.57% | 48 / 889 | 5.40% | 0 | 0 |
+| Held-out test, 10 clips | Beam 8 | 45 / 235 | 19.15% | 52 / 889 | 5.85% | 0 | 0 |
+
+**Decision: reject beam 8; retain production beam 5.** The development result qualified the candidate for the independent test, but test CER worsened. This fails the rule declared before the test. A one-word reduction in test errors does not justify claiming a reliable quality improvement. Version 3.4.0 keeps the recognition settings of 3.3.2; its user-facing improvements are the studio interface, landscape typography and caption editing.
+
+The two splits contain 282.06 seconds of audio in total. Host processing times were 437.96 / 447.54 seconds on development and 439.29 / 450.06 seconds on test for beam 5 / beam 8. The concurrent runs shared CPU resources. After a session interruption, test runs resumed after baseline clip 5 and candidate clip 4, preserving completed outputs; this also limits repeatability of temperature-fallback random state. Timings are diagnostic only. No Android latency or battery claim follows from them.
+
+[Machine-readable manifest, references, hypotheses and scores](benchmarks/fa-3.4.0.json) record all 20 public samples. No user media or user transcript is included. Segment checks only establish numeric bounds, not perceptual alignment with speech. Accurate colloquial recognition, silence/music rejection and real-device runtime still require broader testing.
+
+## Release validation
+
+- 65 JVM tests passed, including five Paparazzi renders of production Compose screens. Other coverage includes Persian/Arabic separation, caption repetition and timing, source/job isolation, landscape sizing and ASS formatting.
+- Native decoder contract and real FFmpeg audio-timeline tests passed in CI.
+- Production ASS fixtures were rendered with FFmpeg and inspected at default and maximum landscape sizes.
+- The signed Android release build passed package, version and existing-installation certificate checks.
+- The privately supplied video also completed transcription through the unchanged production core on the host: nonempty output and segment times within the source duration. No verified reference transcript is available, so no WER or accuracy claim is made for that clip.
+- No physical Android device was available. Screenshot rendering and desktop ASR do not prove phone runtime behavior or arbitrary-video transcription accuracy.

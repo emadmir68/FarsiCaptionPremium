@@ -2,6 +2,8 @@
 
 اپ اندروید برای ساخت زیرنویس آفلاین فارسی؛ فارسی اولویت اصلی است و عربی مسیر زبانی جدا دارد. نسخهٔ فعلی: **3.4.0-studio (45)**، Android 8+، arm64-v8a.
 
+[دانلود مستقیم APK نسخهٔ 3.4.0-studio](https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.0-studio/FarsiCaptionPremium-v3.4.0-studio.apk) · [صفحهٔ انتشار](https://github.com/emadmir68/FarsiCaptionPremium/releases/tag/v3.4.0-studio)
+
 حالت کیفیت از Whisper Large-V3-Turbo استفاده می‌کند؛ با حافظهٔ کمتر Turbo Q5 انتخاب می‌شود. Small فقط با انتخاب صریح حالت سبک اجرا می‌شود. مدل گفتار و Silero VAD یک‌بار دانلود می‌شوند و سپس پردازش روی دستگاه انجام می‌شود. اپ برای تشخیص گفتار به Backend یا API پولی متصل نمی‌شود. پوشهٔ backend کد قدیمی پروژه است و در مسیر فعلی اپ استفاده نمی‌شود.
 
 [آزمون مرجع فارسی نسخهٔ 3.4.0](docs/ASR-BENCHMARK-3.4.0.md) · [گزارش بررسی ASR، آزمون صوت واقعی و محدودیت‌ها](docs/ASR-AUDIT.md) · [تغییرات نسخه](docs/release-notes.md) · [مجوزها](docs/THIRD-PARTY.md)
