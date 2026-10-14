@@ -1,0 +1,80 @@
+name: Persian ASR independent validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/persian-asr-repair]
+    paths: ['.github/workflows/asr-validation.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  selected-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      winner: ${{ steps.selection.outputs.winner }}
+      arms: ${{ steps.selection.outputs.arms }}
+    steps:
+      - name: Read the fixed development selection
+        id: selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p selection
+          for attempt in $(seq 1 100); do
+            if gh run download 38606792364 -n candidate-selection -D selection 2>/dev/null; then break; fi
+            STATE=$(gh run view 38606792364 --json conclusion --jq .conclusion)
+            if [ -n "$STATE" ] && [ "$STATE" != success ]; then exit 1; fi
+            sleep 15
+          done
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          selected=json.loads(Path('selection/selection.json').read_text())
+          winner=selected['winner']
+          assert winner in ('none','merged','vhdm','givia')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('winner='+winner+'\n')
+              f.write('arms='+json.dumps(['baseline',winner] if winner!='none' else ['baseline'])+'\n')
+          print('Frozen development choice:',winner)
+          PY
+  validation:
+    needs: selected-candidate
+    if: needs.selected-candidate.outputs.winner != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: ${{ fromJSON(needs.selected-candidate.outputs.arms) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install evaluation dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          pip install numpy==2.2.6 safetensors==0.6.2
+      - name: Build pinned engine
+        env:
+          ARM: ${{ matrix.arm }}
+        run: |
+          MERGE=OFF
+          if [ "$ARM" = merged ]; then MERGE=ON; fi
+          cmake -S android/app/src/main/cpp -B research-build -DCMAKE_BUILD_TYPE=Release -DCAPTION_BENCHMARK_MERGE_VAD="$MERGE"
+          cmake --build research-build --target asr_batch whisper_quantize --parallel 4
+      - name: Evaluate informal speech and controls
+        env:
+          ARM: ${{ matrix.arm }}
+        run: python scripts/validate_asr_candidate.py "$ARM" validation-work research-build > validation.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-${{ matrix.arm }}
+          path: |
+            validation-work/evidence/
+            validation.log
+          retention-days: 30
