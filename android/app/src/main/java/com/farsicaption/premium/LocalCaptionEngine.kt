@@ -29,6 +29,9 @@ class LocalCaptionEngine(private val context: Context) {
         private val COMPACT_MODEL = ModelSpec("ggml-large-v3-turbo-q5_0.bin",
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
             "Whisper Turbo Q5", 574041195L, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2", "~548MB", 128, 4)
+        private val PERSIAN_MODEL = ModelSpec("ggml-persian-turbo-givia-q5_0.bin",
+            "https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.1-persian/ggml-persian-turbo-givia-q5_0.bin",
+            "Whisper Turbo فارسی (Givia Q5)", 574041195L, "d832fe5cd81c756bc1962765cff4a33cacde00a7701809837875245870b6d5a8", "~548MB", 128, 4)
         private val VAD_MODEL = ModelSpec("ggml-silero-v5.1.2.bin",
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
             "Silero VAD", 885098L, "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf", "~865KB")
@@ -48,13 +51,13 @@ class LocalCaptionEngine(private val context: Context) {
     suspend fun transcribe(uri: Uri, maxWords: Int, language: String = "fa", mode: String = "quality", onStatus: (String) -> Unit,
         onModelProgress: (Int) -> Unit = {}): TranscriptionResult = withContext(Dispatchers.IO) {
         checkCancelled()
-        val preferred = preferredModelSpec(mode)
+        val preferred = preferredModelSpec(mode, language)
         var selected = preferred
         val initial = try { ensureModel(preferred, onStatus, onModelProgress); preferred }
         catch (e: Exception) {
             checkCancelled()
-            if (preferred != TURBO_MODEL) throw e
-            onStatus("دانلود مدل کامل نشد؛ دریافت نسخهٔ کم‌حجم Turbo…")
+            if (preferred != TURBO_MODEL && preferred != PERSIAN_MODEL) throw e
+            onStatus("مدل انتخابی آماده نشد؛ دریافت Turbo عمومی کم‌حجم…")
             ensureModel(COMPACT_MODEL, onStatus, onModelProgress); COMPACT_MODEL
         }
         selected = initial
@@ -67,8 +70,8 @@ class LocalCaptionEngine(private val context: Context) {
             val raw = try { decode(initial, audio, vad, language, onStatus) }
             catch (e: Exception) {
                 checkCancelled()
-                if (initial != TURBO_MODEL) throw e
-                onStatus("حافظه برای مدل کامل کافی نبود یا اجرا ناموفق بود؛ اجرای Turbo کم‌حجم…")
+                if (initial != TURBO_MODEL && initial != PERSIAN_MODEL) throw e
+                onStatus("اجرای مدل انتخابی ناموفق بود؛ اجرای Turbo عمومی کم‌حجم…")
                 ensureModel(COMPACT_MODEL, onStatus, onModelProgress)
                 selected = COMPACT_MODEL
                 decode(COMPACT_MODEL, audio, vad, language, onStatus)
@@ -107,19 +110,25 @@ class LocalCaptionEngine(private val context: Context) {
         checkCancelled()
         if (!ReturnCode.isSuccess(result.returnCode) || audio.length() <= 44) error("صدای ویدیو قابل استخراج نیست")
     }
-    fun preferredModelLabel(): String = preferredModelSpec().label
-    fun preferredModelDownloadLabel(): String = preferredModelSpec().downloadLabel
+    private fun savedModelSpec(): ModelSpec {
+        val preferences = context.getSharedPreferences("editor_settings", Context.MODE_PRIVATE)
+        return preferredModelSpec(preferences.getString("modelMode", "quality") ?: "quality",
+            preferences.getString("speechLanguage", "fa") ?: "fa")
+    }
+    fun preferredModelLabel(): String = savedModelSpec().label
+    fun preferredModelDownloadLabel(): String = savedModelSpec().downloadLabel
     fun isModelReady(): Boolean {
-        val preferred = preferredModelSpec()
+        val preferred = savedModelSpec()
         return modelFile(preferred).length() == preferred.size && modelFile(VAD_MODEL).length() == VAD_MODEL.size
     }
-    private fun preferredModelSpec(mode: String = "quality"): ModelSpec {
+    private fun preferredModelSpec(mode: String = "quality", language: String = "fa"): ModelSpec {
         val info = ActivityManager.MemoryInfo()
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(info)
-        return when (ModelPolicy.select(mode, info.totalMem, info.availMem, info.lowMemory)) {
+        return when (ModelPolicy.select(mode, info.totalMem, info.availMem, info.lowMemory, language)) {
             ModelTier.TURBO -> TURBO_MODEL
             ModelTier.TURBO_COMPACT -> COMPACT_MODEL
             ModelTier.SMALL -> SMALL_MODEL
+            ModelTier.PERSIAN_TURBO -> PERSIAN_MODEL
         }
     }
     private fun modelFile(spec: ModelSpec) = File(File(context.filesDir, "models").apply { mkdirs() }, spec.name)

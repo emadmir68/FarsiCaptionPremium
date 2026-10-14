@@ -62,6 +62,10 @@ jobs:
           mkdir -p previous
           gh release download v3.2.8-stable-alpha --pattern '*.apk' --dir previous
           python3 scripts/package_release.py --previous previous/*.apk
+      - name: Package the verified Persian model
+        run: |
+          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" --build native-build --target whisper_quantize --parallel 2
+          python3 scripts/package_persian_model.py
       - uses: actions/upload-artifact@v4
         with:
           name: FarsiCaptionPremium-v${{ steps.package.outputs.version }}
@@ -82,4 +86,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.package.outputs.version }}
         run: |
-          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "FarsiCaptionPremium v$VERSION" --notes-file docs/release-notes.md --prerelease
+          python3 scripts/check_asr_release.py
+          gh release create "v$VERSION" dist/* --draft --target "$GITHUB_SHA" --title "FarsiCaptionPremium v$VERSION" --notes-file docs/release-notes.md --prerelease
+          gh release edit "v$VERSION" --draft=false --prerelease

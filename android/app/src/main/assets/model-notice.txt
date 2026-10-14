@@ -1,0 +1,13 @@
+Persian speech model: givia/whisper-large-v3-turbo-persian
+Creator: givia. Based on OpenAI Whisper Large-V3-Turbo.
+Source: https://huggingface.co/givia/whisper-large-v3-turbo-persian/tree/9626d38558f04c02f480b702c9db740eea567911
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+Modification for this app: the author's GGML FP16 file was quantized to Q5_0
+with whisper.cpp a8d002cfd879315632a579e73f0148d06959de36. No retraining.
+Model SHA256: d832fe5cd81c756bc1962765cff4a33cacde00a7701809837875245870b6d5a8
+Original model card, training-data credits and limitations:
+https://huggingface.co/givia/whisper-large-v3-turbo-persian/blob/9626d38558f04c02f480b702c9db740eea567911/README.md
+The source card credits Google FLEURS, ESPnet/CMU YODAS2 and the original
+Creative Commons video creators. This app does not imply their endorsement.
+Model weights are downloaded separately and used offline, only for Persian.

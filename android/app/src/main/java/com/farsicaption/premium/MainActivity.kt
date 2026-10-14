@@ -652,10 +652,17 @@ internal fun AutoCaptionPanel(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک").forEach { (key, label) ->
-                    OutlinedButton(onClick = { mode = key }) { Text(if (mode == key) "✓ $label" else label) }
+                val choices = if (speechLanguage == "fa")
+                    listOf("persian" to "فارسی تخصصی", "quality" to "Turbo عمومی", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
+                else listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
+                val shownMode = if (speechLanguage == "ar" && mode == "persian") "quality" else mode
+                choices.forEach { (key, label) ->
+                    OutlinedButton(onClick = { mode = key }) { Text(if (shownMode == key) "✓ $label" else label) }
                 }
             }
+            if (speechLanguage == "fa" && mode == "persian") Text(
+                "مدل ویژهٔ فارسی؛ دریافت یک‌باره حدود ۵۴۸ مگابایت. برای مقایسه می‌توانی Turbo عمومی را انتخاب کنی.",
+                color = TextMuted, fontSize = 12.sp, lineHeight = 19.sp)
             if (mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = AccentSoft, fontSize = 12.sp)
             Button(
                 onClick = { onTranscribe(speechLanguage, mode) },
