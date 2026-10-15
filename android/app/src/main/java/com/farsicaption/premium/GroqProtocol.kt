@@ -47,7 +47,7 @@ internal object GroqProtocol {
     fun parse(raw: String, duration: Double, language: String): List<AsrSegment> {
         val root = JSONObject(raw)
         val text = root.optString("text").trim()
-        val aligned = words(root.optJSONArray("words"))
+        val aligned = words(root.optJSONArray("words")).map { if (it.end <= duration + .1) it.copy(end = min(it.end, duration)) else it }
         if (valid(aligned, duration) && SpeechLanguagePolicy.clean(aligned.joinToString(" ") { it.text }, language) ==
             SpeechLanguagePolicy.clean(text, language)) {
             return listOf(AsrSegment(text, aligned.first().start, aligned.last().end, aligned))
@@ -62,7 +62,7 @@ internal object GroqProtocol {
             require(start.isFinite() && end.isFinite() && start >= 0 && end > start && start < duration && end <= duration + .1) {
                 "زمان‌بندی پاسخ آنلاین نامعتبر است؛ دوباره تلاش کنید"
             }
-            val w = words(s.optJSONArray("words")).takeIf { valid(it, duration) &&
+            val w = words(s.optJSONArray("words")).map { if (it.end <= duration + .1) it.copy(end = min(it.end, duration)) else it }.takeIf { valid(it, duration) &&
                 SpeechLanguagePolicy.clean(it.joinToString(" ") { word -> word.text }, language) == SpeechLanguagePolicy.clean(t, language) }
                 ?: emptyList()
             AsrSegment(t, start, min(end, duration), w)

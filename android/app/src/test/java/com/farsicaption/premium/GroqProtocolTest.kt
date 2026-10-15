@@ -37,6 +37,11 @@ class GroqProtocolTest {
         GroqProtocol.parse("""{"text":"سلام","segments":[{"text":"سلام","start":4,"end":3}]}""",20.0,"fa")
     }
     @Test fun silenceCreatesNoCaption() { assertTrue(GroqProtocol.parse("""{"text":"","segments":[],"words":[]}""",10.0,"fa").isEmpty()) }
+    @Test fun providerRoundingAtAudioEndKeepsWordAlignment() {
+        val json="""{"text":"سلام خوبی","words":[{"word":"سلام","start":1.0,"end":1.4},{"word":"خوبی","start":1.5,"end":2.05}]}"""
+        val caption=CaptionPipeline.build(GroqProtocol.parse(json,2.0,"fa"),2.0,5,"fa").single()
+        assertEquals(2,caption.words.size); assertEquals(2.0,caption.end,0.0)
+    }
     @Test fun arabicNeverPassesThroughPersianNormalizer() {
         val json="""{"text":"كيف حالك","words":[{"word":"كيف","start":1,"end":2},{"word":"حالك","start":2,"end":3}]}"""
         assertEquals("كيف حالك",CaptionPipeline.build(GroqProtocol.parse(json,5.0,"ar"),5.0,5,"ar").single().text)

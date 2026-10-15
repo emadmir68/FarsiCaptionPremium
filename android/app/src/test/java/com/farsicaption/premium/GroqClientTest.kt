@@ -20,7 +20,19 @@ class GroqClientTest {
                 val req=server.takeRequest(2,TimeUnit.SECONDS)!!
                 assertEquals("Bearer test-personal-key",req.getHeader("Authorization"))
                 val body=req.body.readUtf8()
-                for(value in listOf("whisper-large-v3","name=\"language\"\r\n\r\nar","verbose_json","timestamp_granularities[]","word","segment","speech.wav")) assertTrue(value,body.contains(value))
+                val boundary=req.getHeader("Content-Type")!!.substringAfter("boundary=")
+                val fields=body.split("--$boundary").mapNotNull { part ->
+                    val split=part.indexOf("\r\n\r\n")
+                    if(split<0) null else Regex("name=\"([^\"]+)\"").find(part.substring(0,split))?.let {
+                        it.groupValues[1] to part.substring(split+4).trimEnd('\r','\n')
+                    }
+                }.groupBy({it.first},{it.second})
+                assertEquals(listOf("ar"),fields["language"])
+                assertEquals(listOf("whisper-large-v3"),fields["model"])
+                assertEquals(listOf("verbose_json"),fields["response_format"])
+                assertEquals(listOf("word","segment"),fields["timestamp_granularities[]"])
+                assertEquals(listOf("0"),fields["temperature"])
+                assertTrue(body.contains("filename=\"speech.wav\""))
                 assertFalse(body.contains("source.mp4")); assertEquals(1,server.requestCount)
             } finally { file.delete() }
         }

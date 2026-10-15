@@ -115,7 +115,12 @@ class TranscriptionService : Service() {
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { TranscriptionJobStore.update(applicationContext, identity, STATE_ERROR, e.message ?: "خطا در تشخیص گفتار") }
+            catch (e: Exception) {
+                val message = e.message ?: "خطا در تشخیص گفتار"
+                if (TranscriptionJobStore.update(applicationContext, identity, STATE_ERROR, message)) {
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(message))
+                }
+            }
             finally {
                 if (activeIdentity == identity) { stopForeground(STOP_FOREGROUND_DETACH); stopSelf(startId) }
             }
