@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -24,6 +25,7 @@ import org.json.JSONObject
 class TranscriptionService : Service() {
     companion object {
         const val ACTION_START = "com.farsicaption.premium.START_TRANSCRIPTION"
+        const val ACTION_CANCEL = "com.farsicaption.premium.CANCEL_TRANSCRIPTION"
         const val EXTRA_URI = "uri"
         const val EXTRA_MAX_WORDS = "max_words"
         const val EXTRA_LANGUAGE = "language"
@@ -48,6 +50,7 @@ class TranscriptionService : Service() {
 
     private var activeJob: Job? = null
     @Volatile private var activeEngine: LocalCaptionEngine? = null
+    @Volatile private var activeOnlineEngine: GroqCaptionEngine? = null
     @Volatile private var activeIdentity: JobIdentity? = null
 
     override fun onCreate() {
@@ -59,6 +62,15 @@ class TranscriptionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_CANCEL) {
+            val identity = activeIdentity
+            if (identity != null && identity.jobId == intent.getStringExtra(EXTRA_JOB_ID)) {
+                TranscriptionJobStore.update(this, identity, STATE_ERROR, "تشخیص لغو شد؛ زیرنویس قبلی حفظ شد")
+                activeEngine?.cancel(); activeOnlineEngine?.cancel(); activeJob?.cancel()
+                stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
+            }
+            return START_NOT_STICKY
+        }
         if (intent?.action != ACTION_START) return START_NOT_STICKY
         val uri = intent.getStringExtra(EXTRA_URI)?.let(Uri::parse) ?: return START_NOT_STICKY
         val maxWords = intent.getIntExtra(EXTRA_MAX_WORDS, 5)
@@ -68,25 +80,34 @@ class TranscriptionService : Service() {
         val identity = JobIdentity(jobId, uri.toString())
         if (!TranscriptionJobStore.matches(this, identity)) return START_NOT_STICKY
         if (activeIdentity == identity && activeJob?.isActive == true) return START_REDELIVER_INTENT
-        if (getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_STATE, "") == STATE_DONE) {
+        if (getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_STATE, "") != STATE_RUNNING) {
             stopSelf(startId); return START_NOT_STICKY
         }
-        activeEngine?.cancel(); activeJob?.cancel()
+        activeEngine?.cancel(); activeOnlineEngine?.cancel(); activeJob?.cancel()
         activeIdentity = identity
         startForeground(NOTIFICATION_ID, notification("در حال آماده‌سازی…"))
         activeJob = scope.launch {
             try {
                 nativeGate.withLock {
                     if (!TranscriptionJobStore.matches(applicationContext, identity)) return@withLock
-                    val engine = LocalCaptionEngine(applicationContext)
-                    activeEngine = engine
-                    val result = try {
-                        engine.transcribe(uri, maxWords, language, mode, onStatus = { status ->
-                            if (TranscriptionJobStore.update(applicationContext, identity, STATE_RUNNING, status)) {
-                                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
-                            }
-                        }, onModelProgress = { progress -> TranscriptionJobStore.progress(applicationContext, identity, progress) })
-                    } finally { if (activeEngine === engine) activeEngine = null }
+                    val report: (String) -> Unit = { status ->
+                        if (TranscriptionJobStore.update(applicationContext, identity, STATE_RUNNING, status)) {
+                            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
+                        }
+                    }
+                    val progress: (Int) -> Unit = { TranscriptionJobStore.progress(applicationContext, identity, it) }
+                    val result = if (GroqMode.isOnline(mode)) {
+                        val engine = GroqCaptionEngine(applicationContext)
+                        activeOnlineEngine = engine
+                        try { engine.transcribe(uri, maxWords, language, mode, report, progress) }
+                        finally { if (activeOnlineEngine === engine) activeOnlineEngine = null }
+                    } else {
+                        val engine = LocalCaptionEngine(applicationContext)
+                        activeEngine = engine
+                        try { engine.transcribe(uri, maxWords, language, mode, report, progress) }
+                        finally { if (activeEngine === engine) activeEngine = null }
+                    }
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     val array = CaptionJson.encode(result.captions)
                     val message = (if (result.captions.isEmpty()) "گفتاری پیدا نشد؛ زیرنویسی اضافه نشد" else "زیرنویس آماده شد • ${result.captions.size} قطعه") + " • ${result.engineLabel}"
                     if (TranscriptionJobStore.update(applicationContext, identity, STATE_DONE, message, array.toString())) {
@@ -113,6 +134,7 @@ class TranscriptionService : Service() {
 
     override fun onDestroy() {
         activeEngine?.cancel()
+        activeOnlineEngine?.cancel()
         scope.cancel()
         super.onDestroy()
     }
