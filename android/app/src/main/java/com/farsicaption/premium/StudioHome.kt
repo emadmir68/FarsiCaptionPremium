@@ -40,7 +40,7 @@ internal fun HomeScreen(
                 Text("استودیوی زیرنویس", color=TextMuted, fontSize=11.sp)
             }
             Spacer(Modifier.weight(1f))
-            StudioPill("آفلاین", Mint)
+            StudioPill("آنلاین + آفلاین", Mint)
         }
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Text("صدایت را\nدیدنی کن.", color=TextPrimary, fontSize=38.sp, lineHeight=49.sp, fontWeight=FontWeight.Black)
@@ -58,7 +58,7 @@ internal fun HomeScreen(
                 Button(onClick=onPickVideo, modifier=Modifier.fillMaxWidth().heightIn(min=52.dp), shape=RoundedCornerShape(16.dp), colors=ButtonDefaults.buttonColors(containerColor=Mint,contentColor=Ink)) {
                     Text("＋  شروع با یک ویدیو", fontSize=16.sp, fontWeight=FontWeight.Bold)
                 }
-                Text("انتخاب از گالری  ·  پردازش روی گوشی", color=TextMuted, fontSize=12.sp, modifier=Modifier.align(Alignment.CenterHorizontally))
+                Text("انتخاب از گالری  ·  آنلاین یا روی گوشی", color=TextMuted, fontSize=12.sp, modifier=Modifier.align(Alignment.CenterHorizontally))
             }
         }
         if(canResume) OutlinedButton(onClick=onResume, modifier=Modifier.fillMaxWidth().heightIn(min=50.dp), shape=RoundedCornerShape(16.dp), border=BorderStroke(1.dp,Stroke)) {

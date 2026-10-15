@@ -45,4 +45,11 @@ class StudioRenderTest {
             }
         }
     } } }
+    @Test fun onlineKeySetup() { paparazzi.snapshot { StudioTheme {
+        Surface(color=Ink,modifier=Modifier.fillMaxSize()) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+                GroqKeyFields(false,"","",true,{},{},{},{})
+            }
+        }
+    } } }
 }

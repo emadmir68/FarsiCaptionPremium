@@ -300,6 +300,12 @@ private fun PremiumCaptionApp() {
                                 }
                             }
                         },
+                        onCancel = {
+                            context.startService(Intent(context, TranscriptionService::class.java).apply {
+                                action = TranscriptionService.ACTION_CANCEL
+                                putExtra(TranscriptionService.EXTRA_JOB_ID, activeJobId)
+                            })
+                        },
                         onExport = {
                             val uri = sourceUri
                             if (uri != null && captions.isNotEmpty() && !isExporting) {
@@ -374,9 +380,13 @@ private fun EditorScreen(
     onSelectCaption: (Int) -> Unit,
     onEditCaption: (Int, String) -> Unit,
     onTranscribe: (String, String) -> Unit,
+    onCancel: () -> Unit,
     onExport: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf("text") }
+    val settings = LocalContext.current.getSharedPreferences("editor_settings", Context.MODE_PRIVATE)
+    var onlineMode by remember { mutableStateOf(settings.getBoolean("onlineMode", false)) }
+    var showTranscription by rememberSaveable(sourceUri.toString()) { mutableStateOf(false) }
     var videoRatio by remember(sourceUri) { mutableFloatStateOf(9f / 16f) }
     val landscape = videoRatio > 1f
     val activeFont = if (landscape) landscapeFontSize else fontSize
@@ -405,7 +415,7 @@ private fun EditorScreen(
                     shape = RoundedCornerShape(50),
                 ) {
                     Text(
-                        "آفلاین",
+                        if (onlineMode) "آنلاین Groq" else "آفلاین",
                         color = Mint,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -433,7 +443,7 @@ private fun EditorScreen(
                     }
                     Button(
                         onClick = onExport,
-                        enabled = captions.isNotEmpty() && !isExporting,
+                        enabled = captions.isNotEmpty() && !isExporting && !isTranscribing,
                         colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.weight(0.62f),
@@ -482,7 +492,7 @@ private fun EditorScreen(
                             trackColor = Panel2,
                         )
                         Spacer(Modifier.height(6.dp))
-                        Text("دانلود موتور فارسی: $modelProgress٪", color = AccentSoft, fontSize = 12.sp)
+                        Text(if (onlineMode) "پردازش آنلاین: $modelProgress٪" else "دانلود موتور فارسی: $modelProgress٪", color = AccentSoft, fontSize = 12.sp)
                     } else {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
@@ -492,14 +502,23 @@ private fun EditorScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(status, color = TextMuted, fontSize = 12.sp)
+                    TextButton(onClick = onCancel) { Text("لغو تشخیص", color = AccentSoft) }
                 }
             } else {
                 Text(status, color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
             }
 
-            if (captions.isEmpty()) {
-                AutoCaptionPanel(maxWords, onMaxWords, onTranscribe, enabled = !isTranscribing)
-            } else {
+            if (captions.isEmpty() || showTranscription) {
+                AutoCaptionPanel(maxWords, onMaxWords, onTranscribe, enabled = !isTranscribing && !isExporting,
+                    onOnlineMode = { onlineMode = it })
+            }
+            if (captions.isNotEmpty()) {
+                TextButton(onClick = { showTranscription = !showTranscription }, enabled = !isTranscribing && !isExporting,
+                    modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(if (showTranscription) "بستن تنظیمات تشخیص" else "تشخیص دوباره / انتخاب موتور", color = AccentSoft)
+                }
+                if (showTranscription) Text("زیرنویس فعلی تا آماده‌شدن نتیجهٔ جدید حفظ می‌شود.",
+                    color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
                 TimelineStrip(captions, selectedIndex, currentPosition, onSelectCaption)
                 EditorTabs(tab) { tab = it }
 
@@ -619,10 +638,18 @@ internal fun AutoCaptionPanel(
     onMaxWords: (Float) -> Unit,
     onTranscribe: (String, String) -> Unit,
     enabled: Boolean = true,
+    onOnlineMode: (Boolean) -> Unit = {},
 ) {
     val preferences = LocalContext.current.getSharedPreferences("editor_settings", Context.MODE_PRIVATE)
     var speechLanguage by rememberSaveable { mutableStateOf(preferences.getString("speechLanguage", "fa") ?: "fa") }
     var mode by rememberSaveable { mutableStateOf(preferences.getString("modelMode", "quality") ?: "quality") }
+    var online by rememberSaveable { mutableStateOf(preferences.getBoolean("onlineMode", false)) }
+    var onlineModel by rememberSaveable { mutableStateOf(preferences.getString("groqMode", GroqMode.TURBO) ?: GroqMode.TURBO) }
+    var keyReady by remember { mutableStateOf(false) }
+    LaunchedEffect(online, onlineModel) {
+        preferences.edit().putBoolean("onlineMode", online).putString("groqMode", onlineModel).apply()
+        onOnlineMode(online)
+    }
     LaunchedEffect(speechLanguage, mode) {
         preferences.edit().putString("speechLanguage", speechLanguage).putString("modelMode", mode).apply()
     }
@@ -636,42 +663,54 @@ internal fun AutoCaptionPanel(
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("زیرنویس خودکار", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { online = false }, enabled = enabled) { Text(if (!online) "✓ آفلاین" else "آفلاین") }
+                OutlinedButton(onClick = { online = true }, enabled = enabled) { Text(if (online) "✓ آنلاین سریع" else "آنلاین سریع") }
+            }
             Text(
-                "زبان و کیفیت را انتخاب کن. پردازش روی گوشی انجام می‌شود؛ مدل فقط بار اول دانلود می‌شود.",
+                if (online) "تشخیص گفتار روی سرور Groq انجام می‌شود؛ دانلود مدل لازم نیست."
+                else "زبان و کیفیت را انتخاب کن. پردازش روی گوشی انجام می‌شود؛ مدل فقط بار اول دانلود می‌شود.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
             )
             Text("کلمات در هر کپشن: ${maxWords.roundToInt()}", color = TextPrimary, fontSize = 13.sp)
-            Slider(value = maxWords, onValueChange = onMaxWords, valueRange = 2f..7f, steps = 4)
+            Slider(value = maxWords, onValueChange = onMaxWords, valueRange = 2f..7f, steps = 4, enabled = enabled)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("fa" to "فارسی", "ar" to "عربی").forEach { (code, label) ->
-                    OutlinedButton(onClick = { speechLanguage = code }) {
+                    OutlinedButton(onClick = { speechLanguage = code }, enabled = enabled) {
                         Text(if (speechLanguage == code) "✓ $label" else label)
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            if (online) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(GroqMode.TURBO to "Turbo", GroqMode.QUALITY to "Large V3").forEach { (key, label) ->
+                        OutlinedButton(onClick = { onlineModel = key }, enabled = enabled) { Text(if (onlineModel == key) "✓ $label" else label) }
+                    }
+                }
+                GroqSettingsPanel(enabled) { keyReady = it }
+            } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 val choices = if (speechLanguage == "fa")
                     listOf("persian" to "فارسی تخصصی", "quality" to "Turbo عمومی", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
                 else listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
                 val shownMode = if (speechLanguage == "ar" && mode == "persian") "quality" else mode
                 choices.forEach { (key, label) ->
-                    OutlinedButton(onClick = { mode = key }) { Text(if (shownMode == key) "✓ $label" else label) }
+                    OutlinedButton(onClick = { mode = key }, enabled = enabled) { Text(if (shownMode == key) "✓ $label" else label) }
                 }
             }
-            if (speechLanguage == "fa" && mode == "persian") Text(
+            if (!online && speechLanguage == "fa" && mode == "persian") Text(
                 "مدل ویژهٔ فارسی؛ دریافت یک‌باره حدود ۵۴۸ مگابایت. برای مقایسه می‌توانی Turbo عمومی را انتخاب کنی.",
                 color = TextMuted, fontSize = 12.sp, lineHeight = 19.sp)
-            if (mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = AccentSoft, fontSize = 12.sp)
+            if (!online && mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = AccentSoft, fontSize = 12.sp)
             Button(
-                onClick = { onTranscribe(speechLanguage, mode) },
-                enabled = enabled,
+                onClick = { onTranscribe(speechLanguage, if (online) onlineModel else mode) },
+                enabled = enabled && (!online || keyReady),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
                 shape = RoundedCornerShape(17.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (speechLanguage == "ar") "ساخت زیرنویس عربی" else "ساخت زیرنویس فارسی", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
+                Text(if (online) "ارسال صدا و ساخت زیرنویس" else if (speechLanguage == "ar") "ساخت زیرنویس عربی" else "ساخت زیرنویس فارسی", fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 5.dp))
             }
         }
     }

@@ -15,6 +15,9 @@ internal object TranscriptionJobStore {
     }
     @Synchronized fun update(context: Context, identity: JobIdentity, state: String, status: String, result: String? = null): Boolean {
         if (!matches(context, identity)) return false
+        // A late upload callback must not turn a cancelled/finished job back into running.
+        if (state == TranscriptionService.STATE_RUNNING && context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE)
+                .getString(TranscriptionService.KEY_STATE, "") != TranscriptionService.STATE_RUNNING) return false
         val editor = context.getSharedPreferences(TranscriptionService.PREFS, Context.MODE_PRIVATE).edit()
             .putString(TranscriptionService.KEY_STATE, state).putString(TranscriptionService.KEY_STATUS, status)
         if (result != null) editor.putString(TranscriptionService.KEY_RESULT, result)
