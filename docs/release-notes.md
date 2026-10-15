@@ -1,20 +1,13 @@
-Version 3.4.1-stability (46), arm64-v8a / Android 8+.
+نسخهٔ **3.4.2-persian (47)** — Android 8+ / arm64-v8a
 
-- Offline transcription now recovers from native Turbo Q5 decoding failures by retrying with Whisper Small rather than failing the entire video. Full Turbo still retries Q5 first and then Small if needed.
-- Cancellation remains authoritative; it does not trigger a model fallback.
-- Existing app ID, signing key, project data, settings, subtitle export and model caches are unchanged.
-- No paid API, server or unverified Shenava model was added.
-- This is a stability improvement for memory-constrained devices, not a claimed WER/CER accuracy gain.
+- موتور آفلاین جدید در گزینهٔ **«فارسی تخصصی»**: Whisper Turbo تنظیم‌شده برای فارسی، با دانلود یک‌بارهٔ حدود ۵۴۸ مگابایت. تنظیم قبلی موتور خودکار تغییر نمی‌کند؛ برای استفاده از مدل جدید این گزینه را انتخاب کنید.
+- در ۲۰ فایل گفتار خوانده‌شده، خطای کلمات از ۲۰٫۶۳٪ به ۹٫۲۷٪ و در ۱۸ فایل محاوره‌ای از ۴۷٫۴۷٪ به ۳۶٫۳۶٪ رسید. این اعداد نتیجهٔ همین مجموعه‌های کوچک‌اند و تضمین دقت همهٔ ویدیوها نیستند.
+- اصلاح محاسبهٔ احتمال نبود گفتار در موتور native و کنترل مطمئن‌تر گفتار فارسی؛ آزمون موسیقی، سکوت و صدای ثابت بدون کپشن اشتباه تمام شد. گفتار تکرارشدهٔ واقعی و فاصلهٔ زمانی آن حفظ شد.
+- حفظ پوستهٔ استودیویی، اندازهٔ مستقل متن افقی، پروژه‌ها، تنظیمات و امکان نصب روی نسخهٔ قبلی. applicationId و کلید امضا تغییر نکرده‌اند.
+- بازیابی از خطای حافظهٔ نسخهٔ 3.4.1 حفظ شد؛ در صورت شکست اجرا، مدل کم‌حجم‌تر امتحان می‌شود. عربی از مدل تخصصی فارسی استفاده نمی‌کند.
 
-The experimental Shenava accuracy comparison remains isolated in PR #2 and is not part of this release.
+اعتبارسنجی: ۷۲ تست JVM بدون خطا، پنج رندر Compose، آزمون‌های native، آزمون حفظ زمان صوت، ساخت APK امضاشده و بررسی امضای ارتقا. آزمون‌های گفتار پس از اصلاح native برای هر دو مدل تکرار شدند و افت دقت مشاهده نشد.
 
-Version 3.4.0-studio (45), arm64-v8a / Android 8+.
+محدودیت: سرعت و مصرف حافظه روی گوشی واقعی آزمایش نشده است. برای ویدیوی خصوصی کاربر متن مرجع تأییدشده نداریم؛ رفع کامل خطاهای آن ادعا نمی‌شود. گفتار بسیار ضعیف یا کوتاه همچنان ممکن است از دست برود. برنامه API پولی یا Backend تشخیص گفتار ندارد.
 
-- Refreshed Persian studio interface: ink / lilac / turquoise palette, consistent Vazirmatn type, compact video preview, clearer import and resume actions, and caption-by-caption editing without the old 60-caption limit.
-- Independent landscape font preference. At 16:9 / 1080p, the new default is 81 px instead of the previous 43 px. Preview and export share the same scale; landscape size can be adjusted separately through 150. Portrait preferences remain intact.
-- Offline recognition retains the settings of 3.3.2. A wider beam was tested on 20 labeled Persian recordings but rejected: held-out character error increased from 5.40% to 5.85%. The development-only improvement is not presented as an accuracy gain.
-- Existing application ID, signing certificate, saved projects and model downloads are retained. No paid speech API or backend is used.
-
-Validation: 65 JVM tests (including five actual Compose renders), native decoder contract, FFmpeg audio-timeline regression, signed Android build and matching upgrade certificate. Production ASS typography was visually inspected at normal and maximum landscape sizes.
-
-Limitations: the speech benchmark is a small public read-speech sample with male-only metadata, not a measure of arbitrary colloquial or music-backed videos. Physical-device performance has not been tested. Full results: docs/ASR-BENCHMARK-3.4.0.md in the repository.
+گزارش و داده‌های آزمون: [ASR-BENCHMARK-3.4.2](https://github.com/emadmir68/FarsiCaptionPremium/blob/main/docs/ASR-BENCHMARK-3.4.2.md)

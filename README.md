@@ -1,12 +1,14 @@
 # FarsiCaptionPremium
 
-اپ اندروید برای ساخت زیرنویس آفلاین فارسی؛ فارسی اولویت اصلی است و عربی مسیر زبانی جدا دارد. نسخهٔ فعلی: **3.4.0-studio (45)**، Android 8+، arm64-v8a.
+اپ اندروید برای ساخت زیرنویس آفلاین فارسی؛ فارسی اولویت اصلی است و عربی مسیر زبانی جدا دارد. نسخهٔ فعلی: **3.4.2-persian (47)**، Android 8+، arm64-v8a.
 
-[دانلود مستقیم APK نسخهٔ 3.4.0-studio](https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.0-studio/FarsiCaptionPremium-v3.4.0-studio.apk) · [صفحهٔ انتشار](https://github.com/emadmir68/FarsiCaptionPremium/releases/tag/v3.4.0-studio)
+[دانلود مستقیم APK نسخهٔ 3.4.2-persian](https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.2-persian/FarsiCaptionPremium-v3.4.2-persian.apk) · [صفحهٔ انتشار](https://github.com/emadmir68/FarsiCaptionPremium/releases/tag/v3.4.2-persian)
 
-حالت کیفیت از Whisper Large-V3-Turbo استفاده می‌کند؛ با حافظهٔ کمتر Turbo Q5 انتخاب می‌شود. Small فقط با انتخاب صریح حالت سبک اجرا می‌شود. مدل گفتار و Silero VAD یک‌بار دانلود می‌شوند و سپس پردازش روی دستگاه انجام می‌شود. اپ برای تشخیص گفتار به Backend یا API پولی متصل نمی‌شود. پوشهٔ backend کد قدیمی پروژه است و در مسیر فعلی اپ استفاده نمی‌شود.
+برای مدل جدید، **«فارسی تخصصی»** را انتخاب کنید؛ دانلود یک‌بارهٔ آن حدود ۵۴۸ مگابایت است. در آزمون ۱۸ فایل محاوره‌ای، خطای کلمات از ۴۷٫۵٪ به ۳۶٫۴٪ کاهش یافت؛ دقت همهٔ ویدیوها تضمین نمی‌شود. تنظیم موتور قبلی حفظ می‌شود.
 
-[آزمون مرجع فارسی نسخهٔ 3.4.0](docs/ASR-BENCHMARK-3.4.0.md) · [گزارش بررسی ASR، آزمون صوت واقعی و محدودیت‌ها](docs/ASR-AUDIT.md) · [تغییرات نسخه](docs/release-notes.md) · [مجوزها](docs/THIRD-PARTY.md)
+حالت کیفیت از Whisper Large-V3-Turbo استفاده می‌کند؛ با حافظهٔ کمتر Turbo Q5 انتخاب می‌شود. در صورت شکست اجرای مدل به‌علت محدودیت دستگاه، Q5 و سپس Small به‌عنوان جایگزین امتحان می‌شوند. مدل گفتار و Silero VAD یک‌بار دانلود می‌شوند و سپس پردازش روی دستگاه انجام می‌شود. اپ برای تشخیص گفتار به Backend یا API پولی متصل نمی‌شود. پوشهٔ backend کد قدیمی پروژه است و در مسیر فعلی اپ استفاده نمی‌شود.
+
+[نتایج واقعی فارسی نسخهٔ 3.4.2](docs/ASR-BENCHMARK-3.4.2.md) · [گزارش بررسی ASR، آزمون صوت واقعی و محدودیت‌ها](docs/ASR-AUDIT.md) · [تغییرات نسخه](docs/release-notes.md) · [مجوزها](docs/THIRD-PARTY.md)
 
 Build: JDK 17، Gradle 8.10.2، Android SDK 35، NDK 27.2.12479018، CMake 3.22.1. از پوشهٔ android دستور `gradle :app:testDebugUnitTest :app:assembleRelease` را اجرا کنید. کلید امضای موجود باید در مسیر `android/signing/farsi-caption-dev.jks` در دسترس باشد؛ کلید جدید جایگزین نکنید.
 

@@ -73,3 +73,12 @@ failed controls. Publication still requires zero words on the instrumental
 control, valid timings, both repeated-speech occurrences, and no aggregate
 WER/CER/empty-output regression for the selected model versus its initial run.
 Private-video output stays local and has no WER without a verified reference.
+
+## Completed release verification
+
+The native correction passed all 14 regression shards in run 38694071591.
+Speech WER/CER and empty-output counts are unchanged from the initial selected
+model; both models now produce zero text on all three fixed non-speech controls.
+Both repeated-speech occurrences survive. Full results and limitations are in
+[ASR-BENCHMARK-3.4.2.md](ASR-BENCHMARK-3.4.2.md). The new model is opt-in, not a
+replacement for an existing saved quality preference.
