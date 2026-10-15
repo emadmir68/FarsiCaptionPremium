@@ -101,6 +101,21 @@ Engine * load(const std::string & path,int mels,int decoder_layers) {
     return new Engine{ctx};
 }
 static bool abort_callback(void * data) { return static_cast<Engine *>(data)->cancelled.load(); }
+bool has_confident_speech(const float *probabilities,int count,int first_sample,int last_sample) {
+    // Silero v5.1.2 uses 512-sample (32 ms) frames at 16 kHz. A confident
+    // 256 ms speech seed prevents brief instrumental peaks from becoming words.
+    // Keep the existing low-threshold boundaries/padding around a valid seed;
+    // never trim phonemes, join audio, or inspect/replace recognized words.
+    if(!probabilities || count<=0 || last_sample<=first_sample) return false;
+    const int first=std::clamp((first_sample+511)/512,0,count);
+    const int last=std::clamp(last_sample/512,first,count);
+    int consecutive=0;
+    for(int i=first;i<last;++i) {
+        consecutive=probabilities[i]>=0.9f?consecutive+1:0;
+        if(consecutive>=8) return true;
+    }
+    return false;
+}
 std::string transcribe(Engine & engine,const std::string & path,const std::string & vad,const std::string & language,int threads) {
     if(language!="fa" && language!="ar") throw std::runtime_error("Explicit fa/ar language required");
     auto audio=read_pcm16_wav(path);
@@ -131,6 +146,7 @@ std::string transcribe(Engine & engine,const std::string & path,const std::strin
         const int first=std::clamp(static_cast<int>(std::lround(whisper_vad_segments_get_segment_t0(ranges.get(),r)*160)),0,static_cast<int>(audio.size()));
         const int last=std::clamp(static_cast<int>(std::lround(whisper_vad_segments_get_segment_t1(ranges.get(),r)*160)),first,static_cast<int>(audio.size()));
         if(last<=first) continue;
+        if(language=="fa" && !has_confident_speech(whisper_vad_probs(vctx.get()),whisper_vad_n_probs(vctx.get()),first,last)) continue;
 #if defined(CAPTION_BENCHMARK_MERGE_VAD) && !defined(__ANDROID__)
         // Experiment: keep original audio across short pauses for sentence context.
         if(language=="fa" && !windows.empty() && first-windows.back().second<=16000 && last-windows.back().first<=28*16000) {
@@ -173,6 +189,7 @@ std::string transcribe(Engine & engine,const std::string & path,const std::strin
             }
             flush();
             segments+="{\"startMs\":"+std::to_string(start)+",\"endMs\":"+std::to_string(end)+
+                ",\"noSpeechProbability\":"+std::to_string(whisper_full_get_segment_no_speech_prob(engine.ctx,i))+
                 ",\"text\":\""+escape(whisper_full_get_segment_text(engine.ctx,i))+"\",\"words\":["+words+"]}";
         }
     }

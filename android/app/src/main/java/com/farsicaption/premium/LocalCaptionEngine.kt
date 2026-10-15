@@ -30,7 +30,7 @@ class LocalCaptionEngine(private val context: Context) {
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
             "Whisper Turbo Q5", 574041195L, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2", "~548MB", 128, 4)
         private val PERSIAN_MODEL = ModelSpec("ggml-persian-turbo-givia-q5_0.bin",
-            "https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.1-persian/ggml-persian-turbo-givia-q5_0.bin",
+            "https://github.com/emadmir68/FarsiCaptionPremium/releases/download/v3.4.2-persian/ggml-persian-turbo-givia-q5_0.bin",
             "Whisper Turbo فارسی (Givia Q5)", 574041195L, "d832fe5cd81c756bc1962765cff4a33cacde00a7701809837875245870b6d5a8", "~548MB", 128, 4)
         private val VAD_MODEL = ModelSpec("ggml-silero-v5.1.2.bin",
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
@@ -70,11 +70,22 @@ class LocalCaptionEngine(private val context: Context) {
             val raw = try { decode(initial, audio, vad, language, onStatus) }
             catch (e: Exception) {
                 checkCancelled()
-                if (initial != TURBO_MODEL && initial != PERSIAN_MODEL) throw e
-                onStatus("اجرای مدل انتخابی ناموفق بود؛ اجرای Turbo عمومی کم‌حجم…")
-                ensureModel(COMPACT_MODEL, onStatus, onModelProgress)
-                selected = COMPACT_MODEL
-                decode(COMPACT_MODEL, audio, vad, language, onStatus)
+
+                if (initial == SMALL_MODEL) throw e
+                val fallback = if (initial == TURBO_MODEL || initial == PERSIAN_MODEL) COMPACT_MODEL else SMALL_MODEL
+                onStatus("اجرای مدل اصلی ناموفق بود؛ تلاش با ${fallback.label}…")
+                ensureModel(fallback, onStatus, onModelProgress)
+                selected = fallback
+                try { decode(fallback, audio, vad, language, onStatus) }
+                catch (fallbackError: Exception) {
+                    checkCancelled()
+                    if (fallback == SMALL_MODEL) throw fallbackError
+                    onStatus("حافظه کافی برای Turbo نیست؛ تلاش با Whisper Small…")
+                    ensureModel(SMALL_MODEL, onStatus, onModelProgress)
+                    selected = SMALL_MODEL
+                    decode(SMALL_MODEL, audio, vad, language, onStatus)
+                }
+
             }
             checkCancelled()
             val root = JSONObject(raw)

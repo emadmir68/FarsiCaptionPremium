@@ -1,0 +1,53 @@
+name: Validate native no-speech correction
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/persian-asr-repair]
+    paths: ['.github/workflows/asr-fix-validation.yml']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [baseline, givia]
+        sample:
+          - {suite: fleurs, index: 0, count: 3}
+          - {suite: fleurs, index: 1, count: 3}
+          - {suite: fleurs, index: 2, count: 3}
+          - {suite: informal, index: 0, count: 3}
+          - {suite: informal, index: 1, count: 3}
+          - {suite: informal, index: 2, count: 3}
+          - {suite: controls, index: 0, count: 1}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install audio dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Build identical patched native engine
+        run: |
+          cmake -S android/app/src/main/cpp -B research-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build research-build --target asr_batch whisper_quantize native_tests --parallel 4
+          ctest --test-dir research-build --output-on-failure
+      - name: Recheck frozen samples
+        env:
+          ARM: ${{ matrix.arm }}
+          SUITE: ${{ matrix.sample.suite }}
+          SHARD: ${{ matrix.sample.index }}
+          COUNT: ${{ matrix.sample.count }}
+        run: python scripts/verify_asr_fix.py "$ARM" "$SUITE" fix-work research-build --shard-index "$SHARD" --shard-count "$COUNT" > fix.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixed-${{ matrix.arm }}-${{ matrix.sample.suite }}-${{ matrix.sample.index }}
+          path: |
+            fix-work/evidence/
+            fix.log
+          retention-days: 30

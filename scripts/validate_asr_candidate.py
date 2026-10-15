@@ -38,11 +38,7 @@ def decode(build, work, items, name):
                     str(tsv), str(output), '128', '4'], check=True)
     return output
 
-def main(arm, work, build):
-    work.mkdir(parents=True, exist_ok=True)
-    evidence = work/'evidence'; evidence.mkdir(exist_ok=True)
-    source = prepare_model(arm, work/'models', build)
-    (evidence/'model.json').write_text(json.dumps(source, indent=2))
+def prepare_informal(work):
     labels = download(PSRB+'Labels.csv', work/'Labels.csv')
     rows = list(csv.DictReader(labels.open(encoding='utf-8-sig')))
     # This exact pinned CSV has three mismatched headers: duration contains text,
@@ -70,14 +66,21 @@ def main(arm, work, build):
     manifest = dict(dataset='PartAI/PSRB', revision=PSRB_REV, labels_sha256=sha(labels), utterances=selected)
     # Freeze the manifest before decoding, but do not upload restricted text/audio.
     (work/'private-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
+    return manifest
+
+def evaluate_informal(arm, work, build, evidence, manifest):
+    selected = manifest['utterances']
     hypotheses = decode(build, work, selected, 'psrb')
     report = evaluate(manifest, 'test', hypotheses)
     for row in report['utterances']:
         row.pop('reference'); row.pop('hypothesis')
-    report.update(arm=arm, dataset='PartAI/PSRB', revision=PSRB_REV, labels_sha256=sha(labels),
+    report.update(arm=arm, dataset='PartAI/PSRB', revision=PSRB_REV, labels_sha256=manifest['labels_sha256'],
                   sample_metadata=[{k:v for k,v in x.items() if k not in ('wav','reference')} for x in selected])
     (evidence/'informal-report.json').write_text(json.dumps(report, indent=2))
 
+    return report
+
+def evaluate_controls(arm, work, build, evidence):
     # Digital silence and a pure tone must not become speech captions.
     pcm(work/'silence.wav', [0]*48000)
     pcm(work/'tone.wav', [int(3000*math.sin(2*math.pi*440*i/16000)) for i in range(48000)])
@@ -112,9 +115,27 @@ def main(arm, work, build):
     (evidence/'controls.json').write_text(json.dumps(dict(arm=arm,observations=observations,
         music=dict(title='Vibe Ace', author='Kevin MacLeod', license='CC-BY-3.0', sha256=sha(music),
                    source='https://freemusicarchive.org/music/Kevin_MacLeod/Jazz_Sampler/Vibe_Ace')), indent=2))
-    print(json.dumps(dict(arm=arm, informal=report['summary'], controls=observations), indent=2))
+    return observations
+
+def main(arm, work, build, suite='all', shard_index=0, shard_count=1):
+    assert 0 <= shard_index < shard_count
+    work.mkdir(parents=True, exist_ok=True)
+    evidence = work/'evidence'; evidence.mkdir(exist_ok=True)
+    source = prepare_model(arm, work/'models', build)
+    (evidence/'model.json').write_text(json.dumps(source, indent=2))
+    if suite in ('all', 'informal'):
+        manifest = prepare_informal(work)
+        manifest['utterances'] = manifest['utterances'][shard_index::shard_count]
+        report = evaluate_informal(arm, work, build, evidence, manifest)
+        print(json.dumps(dict(arm=arm, informal=report['summary']), indent=2))
+    if suite in ('all', 'controls'):
+        observations = evaluate_controls(arm, work, build, evidence)
+        print(json.dumps(dict(arm=arm, controls=observations), indent=2))
 
 if __name__ == '__main__':
     p=argparse.ArgumentParser();p.add_argument('arm',choices=['baseline','merged','vhdm','givia'])
-    p.add_argument('work',type=Path);p.add_argument('build',type=Path);a=p.parse_args()
-    main(a.arm,a.work.resolve(),a.build.resolve())
+    p.add_argument('work',type=Path);p.add_argument('build',type=Path)
+    p.add_argument('--suite',choices=['all','informal','controls'],default='all')
+    p.add_argument('--shard-index',type=int,default=0);p.add_argument('--shard-count',type=int,default=1)
+    a=p.parse_args()
+    main(a.arm,a.work.resolve(),a.build.resolve(),a.suite,a.shard_index,a.shard_count)

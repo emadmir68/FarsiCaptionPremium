@@ -37,3 +37,39 @@ Incomplete local experiments were lost after the workspace was restored to an ea
 Independent informal-speech protocol, fixed before its decoding: PartAI/PSRB revision 626745e790667d6cbf70bdb10a260d3af90ed2d2; take the first two numerical audio IDs per each of the nine source categories, restricted to informal speech, 3–30 seconds, with no unintelligible-span marker. This yields 18 clips across animation, audiobook, debate, documentary, film, lecture, news, podcast and talk show. Preserve accents/noise/genders as provided. The pinned CSV has misplaced text/duration/speaker-count headers, explicitly validated by the script. PSRB is research/education-only; no recordings or reference/hypothesis text are redistributed, only IDs and metrics. Require aggregate WER/CER and empty-output counts not to increase against the unchanged baseline. These small per-category groups are descriptive, not a statistical guarantee.
 
 Controls: 3 seconds of digital silence, 3 seconds of 440 Hz tone, the first 20 seconds of instrumental Vibe Ace (Kevin MacLeod, CC-BY-3.0), and the first FLEURS dev recording repeated with a 3-second silent gap. Require no speech text on the non-speech controls, both real occurrences preserved, and bounded segment times. Timing bounds are not a measurement of human word-alignment accuracy. The private user clip is checked locally, never uploaded to Actions or GitHub.
+
+## Native correction after the failed music control (3.4.2)
+
+The initial selected Givia candidate improved the 20 fresh FLEURS recordings
+(118 to 53 word errors / 572 reference words) and 18 informal PSRB recordings
+(188 to 144 errors / 396 words). It nevertheless failed the instrumental-music
+control (9 words; stock baseline 8). That candidate was not released.
+
+Inspection found an upstream no-speech correctness bug in pinned whisper.cpp:
+`whisper_batch_prep_legacy` requests logits only for the last prompt token, but
+`whisper_full_with_state` scores the first row for no-speech. That row is zero or
+stale. The local patch explicitly copies the start-of-transcript row and applies
+softmax to that one vocabulary row, following OpenAI Whisper's `sot_index`
+calculation. Both pristine and patched source hashes are checked at configure
+time. No engine upgrade, threshold change or dictionary replacement is hidden
+in this patch. Source: https://github.com/openai/whisper/blob/main/whisper/decoding.py
+
+This correction alone did NOT suppress the music false positives: the Persian
+fine-tune's actual no-speech probabilities were still near zero. They must not
+be presented as a reliable speech/music classifier for this model.
+
+A second, explicitly separate change requires a confident Silero speech seed
+in each Persian VAD window: eight consecutive 32 ms frames with probability at
+least 0.9 (256 ms). Existing 0.5-threshold boundaries, 200 ms padding and original
+sample offsets are retained; the seed is only a window acceptance check. Short
+confident speech is preserved; weak or very brief speech can be missed, so the
+change requires corpus regression checks. Arabic keeps its existing VAD policy.
+
+Before release, re-run BOTH models on the exact fixed 20 FLEURS and 18 PSRB
+recordings and the original controls, in deterministic execution shards. These
+are regression checks after a diagnosed failure, not a new unseen evaluation.
+Do not tune this seed on speech evaluation outputs. Retain old raw results and
+failed controls. Publication still requires zero words on the instrumental
+control, valid timings, both repeated-speech occurrences, and no aggregate
+WER/CER/empty-output regression for the selected model versus its initial run.
+Private-video output stays local and has no WER without a verified reference.

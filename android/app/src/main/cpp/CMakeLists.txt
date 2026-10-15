@@ -21,6 +21,7 @@ if(NOT WHISPER_SOURCE_DIR)
     endif()
     set(WHISPER_SOURCE_DIR ${whisper_source_SOURCE_DIR})
 endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/patch_whisper.cmake)
 add_subdirectory(${WHISPER_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/whisper)
 add_library(caption_core STATIC caption_core.cpp)
 target_link_libraries(caption_core PUBLIC whisper)
@@ -45,6 +46,8 @@ else()
     target_link_libraries(asr_batch PRIVATE caption_core)
     add_executable(asr_probe asr_probe.cpp)
     target_link_libraries(asr_probe PRIVATE caption_core)
+    add_executable(vad_probe EXCLUDE_FROM_ALL vad_probe.cpp)
+    target_link_libraries(vad_probe PRIVATE caption_core)
     # Reproducible research conversion using this same pinned ggml implementation.
     add_executable(whisper_quantize EXCLUDE_FROM_ALL
         ${WHISPER_SOURCE_DIR}/examples/quantize/quantize.cpp

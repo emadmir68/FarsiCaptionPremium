@@ -13,6 +13,16 @@ int main() {
         check(p.vad && p.suppress_nst && p.suppress_blank && p.n_threads==8,"VAD and threading settings");
         check(p.strategy==WHISPER_SAMPLING_BEAM_SEARCH && p.beam_search.beam_size==5,"beam configuration");
         check(std::string(caption::parameters("ar",1,"vad.bin").language)=="ar","Arabic language isolation");
+        std::vector<float> quiet(20,0.1f);
+        check(!caption::has_confident_speech(quiet.data(),quiet.size(),0,20*512),"quiet audio has no speech seed");
+        quiet[5]=0.99f;
+        check(!caption::has_confident_speech(quiet.data(),quiet.size(),0,20*512),"isolated music peak is not speech");
+        for(int i=5;i<13;++i) quiet[i]=0.99f;
+        check(caption::has_confident_speech(quiet.data(),quiet.size(),0,20*512),"short confident speech survives");
+        check(!caption::has_confident_speech(quiet.data(),quiet.size(),0,12*512),"a later window cannot lend a speech seed");
+        quiet[8]=0.2f;
+        check(!caption::has_confident_speech(quiet.data(),quiet.size(),0,20*512),"separated peaks are not continuous speech");
+        check(!caption::has_confident_speech(nullptr,0,0,512),"missing probabilities fail closed");
         std::ofstream f("native-tail.wav",std::ios::binary);
         f.write("RIFF",4); le(f,36+10+2*4103,4); f.write("WAVEJUNK",8); le(f,1,4); f.put('x'); f.put(0);
         f.write("fmt ",4); le(f,16,4); le(f,1,2); le(f,1,2); le(f,16000,4); le(f,32000,4); le(f,2,2); le(f,16,2);

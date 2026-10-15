@@ -1,3 +1,13 @@
+Version 3.4.1-stability (46), arm64-v8a / Android 8+.
+
+- Offline transcription now recovers from native Turbo Q5 decoding failures by retrying with Whisper Small rather than failing the entire video. Full Turbo still retries Q5 first and then Small if needed.
+- Cancellation remains authoritative; it does not trigger a model fallback.
+- Existing app ID, signing key, project data, settings, subtitle export and model caches are unchanged.
+- No paid API, server or unverified Shenava model was added.
+- This is a stability improvement for memory-constrained devices, not a claimed WER/CER accuracy gain.
+
+The experimental Shenava accuracy comparison remains isolated in PR #2 and is not part of this release.
+
 Version 3.4.0-studio (45), arm64-v8a / Android 8+.
 
 - Refreshed Persian studio interface: ink / lilac / turquoise palette, consistent Vazirmatn type, compact video preview, clearer import and resume actions, and caption-by-caption editing without the old 60-caption limit.
