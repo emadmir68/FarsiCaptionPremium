@@ -77,7 +77,6 @@ whisper_full_params parameters(const char * language, int threads, const char * 
 #if defined(CAPTION_BENCHMARK_BEAM_SIZE) && !defined(__ANDROID__)
     p.beam_search.beam_size=CAPTION_BENCHMARK_BEAM_SIZE;
 #endif
-    p.greedy.best_of=5;
     p.no_speech_thold=0.6f;
     p.logprob_thold=-1.0f;
     p.vad=vad_path && vad_path[0];
