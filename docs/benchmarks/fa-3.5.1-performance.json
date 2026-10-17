@@ -1,0 +1,106 @@
+{
+  "version": "3.5.1-performance",
+  "base_commit": "ab064224989dec2556904154d3f58f28979f2593",
+  "native_core_sha256": "209624f69b2822adbc366e58b5bdc2cbdb9c9a01ff222c3f79f91ed2c82b75e9",
+  "previous_evidence": "docs/benchmarks/fa-3.4.2.json",
+  "validation": {
+    "branch": "validation/v351-performance",
+    "commit": "11963aed441e85db5b2f2f765a5c138c8a20b574",
+    "run_id": 39050663913,
+    "conclusion": "success"
+  },
+  "controls": {
+    "current": {
+      "music": {
+        "invalid_segment_times": 0,
+        "segments": 0,
+        "words": 0
+      },
+      "repeat": {
+        "first_occurrence": true,
+        "gap_seconds": 3,
+        "invalid_segment_times": 0,
+        "reference_words": 30,
+        "second_occurrence": true,
+        "segments": 4,
+        "word_errors": 2,
+        "words": 30
+      },
+      "silence": {
+        "invalid_segment_times": 0,
+        "segments": 0,
+        "words": 0
+      },
+      "tone": {
+        "invalid_segment_times": 0,
+        "segments": 0,
+        "words": 0
+      }
+    }
+  },
+  "fleurs_subset": {
+    "ids": [
+      "test-10246451319961992387",
+      "test-10375540450909317904",
+      "test-10420872632796282639",
+      "test-10592239511754820307",
+      "test-10639782395810656945"
+    ],
+    "current": {
+      "CER": 0.023554603854389723,
+      "RTF": 3.377553910106521,
+      "WER": 0.07142857142857142,
+      "audio_seconds": 76.98,
+      "character_errors": 11,
+      "characters": 467,
+      "clips": 5,
+      "empty_hypotheses": 0,
+      "invalid_segment_times": 0,
+      "processing_seconds": 260.0041,
+      "word_errors": 9,
+      "words": 126
+    },
+    "previous": {
+      "processing_seconds": 447.5223,
+      "word_errors": 9,
+      "words": 126
+    }
+  },
+  "informal": {
+    "current": {
+      "CER": 0.12345679012345678,
+      "RTF": 6.80440918119545,
+      "WER": 0.36363636363636365,
+      "audio_seconds": 150.70181300000002,
+      "character_errors": 170,
+      "characters": 1377,
+      "clips": 18,
+      "empty_hypotheses": 0,
+      "invalid_segment_times": 0,
+      "processing_seconds": 1025.4368,
+      "word_errors": 144,
+      "words": 396
+    },
+    "previous": {
+      "CER": 0.12636165577342048,
+      "RTF": 6.776118214317701,
+      "WER": 0.36363636363636365,
+      "audio_seconds": 150.701813,
+      "character_errors": 174,
+      "characters": 1377,
+      "clips": 18,
+      "empty_hypotheses": 0,
+      "invalid_segment_times": 0,
+      "processing_seconds": 1021.1732999999999,
+      "word_errors": 144,
+      "words": 396
+    }
+  },
+  "notes": [
+    "No user media was used in validation.",
+    "Restricted informal corpus audio/transcripts were not committed; only aggregate metrics are retained.",
+    "The FLEURS subset held word errors constant while processing time fell from 447.5223s to 260.0041s (~41.9%).",
+    "The full informal set held WER constant and improved CER slightly; processing time changed from 1021.1733s to 1025.4368s (~0.4% slower), so no universal speed-up claim is made.",
+    "Android direct file-descriptor audio extraction is covered by build/regression tests but requires physical-device timing for end-to-end latency."
+  ]
+}
