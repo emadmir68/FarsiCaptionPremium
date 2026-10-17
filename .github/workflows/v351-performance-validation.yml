@@ -1,0 +1,98 @@
+name: Validate v3.5.1 performance ASR
+on:
+  push:
+    branches: [validation/v351-performance]
+    paths: ['.github/workflows/v351-performance-validation.yml']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: informal
+            shard_index: 0
+            shard_count: 1
+          - suite: fleurs
+            shard_index: 0
+            shard_count: 4
+          - suite: controls
+            shard_index: 0
+            shard_count: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install audio dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Build current native engine
+        run: |
+          cmake -S android/app/src/main/cpp -B research-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build research-build --target asr_batch whisper_quantize native_tests --parallel 4
+          ctest --test-dir research-build --output-on-failure
+          sha256sum android/app/src/main/cpp/caption_core.cpp
+      - name: Run frozen regression sample
+        env:
+          SUITE: ${{ matrix.suite }}
+          SHARD_INDEX: ${{ matrix.shard_index }}
+          SHARD_COUNT: ${{ matrix.shard_count }}
+        run: |
+          python scripts/verify_asr_fix.py givia "$SUITE" validation-work research-build --shard-index "$SHARD_INDEX" --shard-count "$SHARD_COUNT" > validation.log 2>&1
+          cat validation.log
+      - name: Compare against frozen 3.4.2 evidence
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path('.')
+          old=json.loads((root/'docs/benchmarks/fa-3.4.2.json').read_text())
+          core=hashlib.sha256((root/'android/app/src/main/cpp/caption_core.cpp').read_bytes()).hexdigest()
+          suite=os.environ['SUITE']
+          ev=root/'validation-work/evidence'
+          if suite=='informal':
+              cur=json.loads((ev/'informal-report.json').read_text())
+              prev=old['corrected']['informal']['givia']
+              a,b=cur['summary'],prev['summary']
+              assert a['clips']==18 and a['words']==b['words'] and a['characters']==b['characters']
+              assert a['word_errors']<=b['word_errors'] and a['character_errors']<=b['character_errors']
+              assert a['empty_hypotheses']<=b['empty_hypotheses'] and a['invalid_segment_times']==0
+              payload={'suite':suite,'core_sha256':core,'current':a,'previous':b}
+          elif suite=='fleurs':
+              cur=json.loads((ev/'report.json').read_text())
+              rows=cur['utterances']
+              old_rows={x['id']:x for x in old['corrected']['held_out']['givia']['utterances']}
+              assert all(x['id'] in old_rows for x in rows)
+              previous_words=sum(old_rows[x['id']]['words'] for x in rows)
+              previous_errors=sum(old_rows[x['id']]['word_errors'] for x in rows)
+              a=cur['summary']
+              assert a['words']==previous_words and a['word_errors']<=previous_errors
+              assert a['empty_hypotheses']==0 and a['invalid_segment_times']==0
+              payload={'suite':suite,'core_sha256':core,'ids':[x['id'] for x in rows],
+                       'current':a,'previous_word_errors':previous_errors,'previous_words':previous_words}
+          else:
+              cur=json.loads((ev/'controls.json').read_text())['observations']
+              prev=old['corrected']['controls']['givia']['observations']
+              for name in ('silence','tone','music'):
+                  assert cur[name]['words']==cur[name]['segments']==cur[name]['invalid_segment_times']==0
+              r=cur['repeat']
+              assert r['first_occurrence'] and r['second_occurrence'] and r['invalid_segment_times']==0
+              assert r['word_errors']<=prev['repeat']['word_errors']
+              payload={'suite':suite,'core_sha256':core,'current':cur,'previous':prev}
+          print('V351_EVIDENCE='+json.dumps(payload,ensure_ascii=False,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v351-${{ matrix.suite }}
+          path: |
+            validation-work/evidence/
+            validation.log
+          retention-days: 30
