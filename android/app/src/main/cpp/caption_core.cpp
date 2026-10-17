@@ -52,8 +52,8 @@ std::string escape(const std::string & value) {
     }
     return out;
 }
-whisper_full_params parameters(const char * language, int threads, const char * vad_path) {
-    auto p=whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
+whisper_full_params parameters(const char * language, int threads, const char * vad_path, bool fast_decode) {
+    auto p=whisper_full_default_params(fast_decode ? WHISPER_SAMPLING_GREEDY : WHISPER_SAMPLING_BEAM_SEARCH);
     p.language=language;
     p.detect_language=false;
     p.translate=false;
@@ -72,11 +72,11 @@ whisper_full_params parameters(const char * language, int threads, const char * 
     p.suppress_nst=true;
     p.temperature=0.0f;
     p.temperature_inc=0.2f;
+    p.greedy.best_of=fast_decode?1:5;
     p.beam_search.beam_size=5;
 #if defined(CAPTION_BENCHMARK_BEAM_SIZE) && !defined(__ANDROID__)
     p.beam_search.beam_size=CAPTION_BENCHMARK_BEAM_SIZE;
 #endif
-    p.greedy.best_of=5;
     p.no_speech_thold=0.6f;
     p.logprob_thold=-1.0f;
     p.vad=vad_path && vad_path[0];
@@ -116,8 +116,30 @@ bool has_confident_speech(const float *probabilities,int count,int first_sample,
     }
     return false;
 }
-std::string transcribe(Engine & engine,const std::string & path,const std::string & vad,const std::string & language,int threads) {
+
+std::vector<std::pair<int,int>> coalesce_speech_windows(
+    const std::vector<std::pair<int,int>> & input,
+    int max_gap_samples,
+    int max_window_samples) {
+    std::vector<std::pair<int,int>> out;
+    for(const auto & window:input) {
+        if(window.second<=window.first) continue;
+        if(!out.empty()) {
+            auto & previous=out.back();
+            const int gap=window.first-previous.second;
+            const int combined=window.second-previous.first;
+            if(gap>=0 && gap<=max_gap_samples && combined<=max_window_samples) {
+                previous.second=window.second;
+                continue;
+            }
+        }
+        out.push_back(window);
+    }
+    return out;
+}
+std::string transcribe(Engine & engine,const std::string & path,const std::string & vad,const std::string & language,int threads,bool fast_decode) {
     if(language!="fa" && language!="ar") throw std::runtime_error("Explicit fa/ar language required");
+    engine.cancelled=false;
     auto audio=read_pcm16_wav(path);
     if(engine.cancelled) throw std::runtime_error("Cancelled");
     const double duration=audio.size()/16000.0;
@@ -130,7 +152,7 @@ std::string transcribe(Engine & engine,const std::string & path,const std::strin
     std::unique_ptr<whisper_vad_context,decltype(&whisper_vad_free)> vctx(
         whisper_vad_init_from_file_with_params(vad.c_str(),vp),whisper_vad_free);
     if(!vctx) throw std::runtime_error("VAD model could not be loaded");
-    auto p=parameters(language.c_str(),threads,vad.c_str());
+    auto p=parameters(language.c_str(),threads,vad.c_str(),fast_decode);
     auto vad_params=p.vad_params;
     vad_params.max_speech_duration_s=28.0f;
     std::unique_ptr<whisper_vad_segments,decltype(&whisper_vad_free_segments)> ranges(
@@ -147,15 +169,13 @@ std::string transcribe(Engine & engine,const std::string & path,const std::strin
         const int last=std::clamp(static_cast<int>(std::lround(whisper_vad_segments_get_segment_t1(ranges.get(),r)*160)),first,static_cast<int>(audio.size()));
         if(last<=first) continue;
         if(language=="fa" && !has_confident_speech(whisper_vad_probs(vctx.get()),whisper_vad_n_probs(vctx.get()),first,last)) continue;
-#if defined(CAPTION_BENCHMARK_MERGE_VAD) && !defined(__ANDROID__)
-        // Experiment: keep original audio across short pauses for sentence context.
-        if(language=="fa" && !windows.empty() && first-windows.back().second<=16000 && last-windows.back().first<=28*16000) {
-            windows.back().second=last;
-            continue;
-        }
-#endif
         windows.emplace_back(first,last);
     }
+    // Persian conversational speech is often split into many short VAD ranges.
+    // Running Whisper separately for each range repeats encoder/setup work.
+    // Keep the original audio and timestamps, but batch neighbouring ranges
+    // across pauses up to 1 second while preserving the existing 28-second cap.
+    if(language=="fa") windows=coalesce_speech_windows(windows,16000,28*16000);
     for(const auto & window:windows) {
         const int first=window.first,last=window.second;
         const int64_t offset=first/16, limit=last/16;

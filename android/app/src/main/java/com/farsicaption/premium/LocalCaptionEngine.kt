@@ -3,6 +3,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.net.Uri
 import android.media.MediaMetadataRetriever
+import android.os.SystemClock
+import android.util.Log
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.ReturnCode
 import kotlinx.coroutines.CancellationException
@@ -63,11 +65,23 @@ class LocalCaptionEngine(private val context: Context) {
         selected = initial
         val vad = ensureModel(VAD_MODEL, onStatus, onModelProgress)
         onStatus("آماده‌سازی صدای اصلی با نرخ ۱۶ کیلوهرتز…")
-        val video = File.createTempFile("source-", ".mp4", context.cacheDir)
+        val pipelineStarted = SystemClock.elapsedRealtime()
+        val audioStarted = pipelineStarted
+        var fallbackVideo: File? = null
         val audio = File.createTempFile("speech-", ".wav", context.cacheDir)
+        var directUri = false
         try {
-            copyUri(uri, video); extractAudio(video, audio); checkCancelled()
-            val raw = try { decode(initial, audio, vad, language, onStatus) }
+            directUri = extractAudio(uri, audio)
+            if (!directUri) {
+                fallbackVideo = File.createTempFile("source-", ".mp4", context.cacheDir)
+                copyUri(uri, fallbackVideo!!)
+                extractAudio(fallbackVideo!!, audio)
+            }
+            checkCancelled()
+            val audioPrepMs = SystemClock.elapsedRealtime() - audioStarted
+            val asrStarted = SystemClock.elapsedRealtime()
+            val fastDecode = mode == "fast"
+            val raw = try { decode(initial, audio, vad, language, fastDecode, onStatus) }
             catch (e: Exception) {
                 checkCancelled()
 
@@ -76,17 +90,18 @@ class LocalCaptionEngine(private val context: Context) {
                 onStatus("اجرای مدل اصلی ناموفق بود؛ تلاش با ${fallback.label}…")
                 ensureModel(fallback, onStatus, onModelProgress)
                 selected = fallback
-                try { decode(fallback, audio, vad, language, onStatus) }
+                try { decode(fallback, audio, vad, language, fastDecode, onStatus) }
                 catch (fallbackError: Exception) {
                     checkCancelled()
                     if (fallback == SMALL_MODEL) throw fallbackError
                     onStatus("حافظه کافی برای Turbo نیست؛ تلاش با Whisper Small…")
                     ensureModel(SMALL_MODEL, onStatus, onModelProgress)
                     selected = SMALL_MODEL
-                    decode(SMALL_MODEL, audio, vad, language, onStatus)
+                    decode(SMALL_MODEL, audio, vad, language, fastDecode, onStatus)
                 }
 
             }
+            val asrMs = SystemClock.elapsedRealtime() - asrStarted
             checkCancelled()
             val root = JSONObject(raw)
             val duration = root.getDouble("duration")
@@ -101,10 +116,13 @@ class LocalCaptionEngine(private val context: Context) {
                     })
             }
             val captions = CaptionPipeline.build(segments, duration, maxWords, language)
+            Log.i("FarsiCaptionPerf",
+                "audioPrepMs=$audioPrepMs asrMs=$asrMs totalMs=${SystemClock.elapsedRealtime() - pipelineStarted} " +
+                    "directUri=$directUri model=${selected.label} segments=${segments.size} captions=${captions.size}")
             TranscriptionResult(captions.joinToString(" ") { it.text }, duration, captions, selected.label)
-        } finally { video.delete(); audio.delete() }
+        } finally { fallbackVideo?.delete(); audio.delete() }
     }
-    private fun decode(spec: ModelSpec, audio: File, vad: File, language: String, onStatus: (String) -> Unit): String {
+    private fun decode(spec: ModelSpec, audio: File, vad: File, language: String, fastDecode: Boolean, onStatus: (String) -> Unit): String {
         checkCancelled()
         onStatus("تشخیص گفتار با ${spec.label} • زبان ${if (language == "ar") "عربی" else "فارسی"}…")
         val handle = NativeWhisper.load(modelFile(spec).absolutePath, spec.mels, spec.layers)
@@ -112,11 +130,25 @@ class LocalCaptionEngine(private val context: Context) {
         try {
             checkCancelled()
             return NativeWhisper.transcribe(handle, audio.absolutePath, vad.absolutePath,
-                SpeechLanguagePolicy.whisperLanguage(language), Runtime.getRuntime().availableProcessors().coerceIn(1, 8)).toString(Charsets.UTF_8)
+                SpeechLanguagePolicy.whisperLanguage(language), Runtime.getRuntime().availableProcessors().coerceIn(1, 8), fastDecode).toString(Charsets.UTF_8)
         } finally { synchronized(modelLock) { NativeWhisper.release(handle); nativeHandle = 0L } }
     }
+    private fun extractAudio(uri: Uri, audio: File): Boolean {
+        // Most Android document providers expose a readable file descriptor. Feeding it
+        // directly to FFmpeg avoids copying the whole video to cache before ASR.
+        val descriptor = try { context.contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
+        descriptor?.use { fd ->
+            val input = "/proc/self/fd/${fd.fd}"
+            val result = FFmpegKit.execute("-y -i ${q(input)} -map 0:a:0 -vn -ac 1 -ar 16000 -af aresample=async=1:first_pts=0 -c:a pcm_s16le ${q(audio.absolutePath)}")
+            checkCancelled()
+            if (ReturnCode.isSuccess(result.returnCode) && audio.length() > 44) return true
+        }
+        audio.delete()
+        return false
+    }
     private fun extractAudio(video: File, audio: File) {
-        // Preserve stream timestamps, including delayed audio and timestamp gaps. No denoising or lexical correction.
+        // Fallback for providers whose descriptor cannot be consumed directly.
+        // Preserve stream timestamps, including delayed audio and timestamp gaps.
         val result = FFmpegKit.execute("-y -i ${q(video.absolutePath)} -map 0:a:0 -vn -ac 1 -ar 16000 -af aresample=async=1:first_pts=0 -c:a pcm_s16le ${q(audio.absolutePath)}")
         checkCancelled()
         if (!ReturnCode.isSuccess(result.returnCode) || audio.length() <= 44) error("صدای ویدیو قابل استخراج نیست")

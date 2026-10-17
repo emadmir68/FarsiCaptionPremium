@@ -17,8 +17,8 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         minSdk = 26
         targetSdk = 35
-        versionCode = 48
-        versionName = "3.5.0-online"
+        versionCode = 49
+        versionName = "3.5.1-performance"
     }
 
     signingConfigs {
