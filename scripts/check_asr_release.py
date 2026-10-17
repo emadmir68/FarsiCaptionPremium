@@ -10,7 +10,53 @@ baseline_sha = '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
 candidate_sha = 'd832fe5cd81c756bc1962765cff4a33cacde00a7701809837875245870b6d5a8'
 assert evidence['candidate'] == 'givia'
 core = ROOT/'android/app/src/main/cpp/caption_core.cpp'
-assert hashlib.sha256(core.read_bytes()).hexdigest() == evidence['native_core_sha256']
+core_sha = hashlib.sha256(core.read_bytes()).hexdigest()
+if core_sha != evidence['native_core_sha256']:
+    perf = json.loads((ROOT/'docs/benchmarks/fa-3.5.1-performance.json').read_text())
+    assert perf['version'] == '3.5.1-performance'
+    assert perf['base_commit'] == 'ab064224989dec2556904154d3f58f28979f2593'
+    assert perf['native_core_sha256'] == core_sha
+    validation = perf['validation']
+    assert validation['commit'] == '11963aed441e85db5b2f2f765a5c138c8a20b574'
+    assert validation['run_id'] == 39050663913 and validation['conclusion'] == 'success'
+
+    old_controls = evidence['corrected']['controls']['givia']['observations']
+    new_controls = perf['controls']['current']
+    for name in ('silence','tone','music'):
+        assert new_controls[name]['words'] == new_controls[name]['segments'] == 0
+        assert new_controls[name]['invalid_segment_times'] == 0
+    repeat = new_controls['repeat']
+    assert repeat['first_occurrence'] and repeat['second_occurrence']
+    assert repeat['invalid_segment_times'] == 0
+    assert repeat['word_errors'] <= old_controls['repeat']['word_errors']
+
+    old_informal = evidence['corrected']['informal']['givia']['summary']
+    new_informal = perf['informal']['current']
+    assert new_informal['clips'] == old_informal['clips'] == 18
+    assert new_informal['words'] == old_informal['words'] and new_informal['characters'] == old_informal['characters']
+    assert new_informal['word_errors'] <= old_informal['word_errors']
+    assert new_informal['character_errors'] <= old_informal['character_errors']
+    assert new_informal['empty_hypotheses'] <= old_informal['empty_hypotheses']
+    assert new_informal['invalid_segment_times'] == 0
+    # Do not accept a material regression on the full informal set.
+    assert new_informal['processing_seconds'] <= old_informal['processing_seconds'] * 1.02
+
+    subset = perf['fleurs_subset']
+    old_rows = {x['id']: x for x in evidence['corrected']['held_out']['givia']['utterances']}
+    assert len(subset['ids']) == 5 and len(set(subset['ids'])) == 5
+    assert all(i in old_rows for i in subset['ids'])
+    old_words = sum(old_rows[i]['words'] for i in subset['ids'])
+    old_errors = sum(old_rows[i]['word_errors'] for i in subset['ids'])
+    old_seconds = sum(old_rows[i]['elapsed_seconds'] for i in subset['ids'])
+    current = subset['current']
+    assert current['clips'] == 5 and current['words'] == old_words
+    assert current['word_errors'] <= old_errors
+    assert current['empty_hypotheses'] == 0 and current['invalid_segment_times'] == 0
+    assert abs(subset['previous']['processing_seconds'] - old_seconds) < 0.001
+    assert subset['previous']['word_errors'] == old_errors and subset['previous']['words'] == old_words
+    # This subset is the explicit latency regression guard for the new batching path.
+    assert current['processing_seconds'] <= old_seconds * 0.80
+    print('v3.5.1 performance evidence accepted:', validation['run_id'], core_sha)
 patch = ROOT/'android/app/src/main/cpp/patch_whisper.cmake'
 assert hashlib.sha256(patch.read_bytes()).hexdigest() == evidence['native_patch_sha256']
 
