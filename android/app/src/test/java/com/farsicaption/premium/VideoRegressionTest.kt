@@ -4,14 +4,14 @@ import org.junit.Test
 class VideoRegressionTest {
     @Test fun lowFreeMemoryStillSelectsTurbo() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("quality",8_000_000_000L,2_000_000_000L,false)) }
     @Test fun lowMemoryDoesNotSilentlyChooseSmall() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("quality",4_000_000_000L,900_000_000L,true)) }
-    @Test fun smallRequiresExplicitChoice() { assertEquals(ModelTier.SMALL, ModelPolicy.select("fast",8_000_000_000L,4_000_000_000L,false)) }
+    @Test fun fastUsesTurboCompact() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("fast",8_000_000_000L,4_000_000_000L,false)) }
     @Test fun compactChoiceDoesNotLoadFullModel() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("compact",8_000_000_000L,4_000_000_000L,false)) }
     @Test fun fullGenericTurboRemainsAvailableWithHeadroom() { assertEquals(ModelTier.TURBO, ModelPolicy.select("quality",8_000_000_000L,4_000_000_000L,false)) }
     @Test fun persianOptionUsesTheMeasuredModelEvenWithMoreMemory() { assertEquals(ModelTier.PERSIAN_TURBO, ModelPolicy.select("persian",8_000_000_000L,4_000_000_000L,false,"fa")) }
     @Test fun persianLowMemoryDoesNotSilentlySelectSmall() { assertEquals(ModelTier.PERSIAN_TURBO, ModelPolicy.select("persian",4_000_000_000L,900_000_000L,true,"fa")) }
     @Test fun arabicNeverUsesPersianAdaptation() { assertEquals(ModelTier.TURBO, ModelPolicy.select("quality",8_000_000_000L,4_000_000_000L,false,"ar")) }
     @Test fun arabicLowMemoryRetainsGenericTurbo() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("quality",4_000_000_000L,900_000_000L,true,"ar")) }
-    @Test fun arabicFastChoiceRemainsExplicit() { assertEquals(ModelTier.SMALL, ModelPolicy.select("fast",8_000_000_000L,4_000_000_000L,false,"ar")) }
+    @Test fun arabicFastUsesTurboCompact() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("fast",8_000_000_000L,4_000_000_000L,false,"ar")) }
     @Test fun switchingToArabicAfterPersianOptionUsesGenericModel() { assertEquals(ModelTier.TURBO, ModelPolicy.select("persian",8_000_000_000L,4_000_000_000L,false,"ar")) }
     @Test fun persianModelIsNotSelectedForUnknownLanguage() { assertEquals(ModelTier.TURBO, ModelPolicy.select("persian",8_000_000_000L,4_000_000_000L,false,"auto")) }
     @Test fun unknownModeRetainsQualityDefault() { assertEquals(ModelTier.TURBO_COMPACT, ModelPolicy.select("legacy",8_000_000_000L,2_000_000_000L,false)) }
