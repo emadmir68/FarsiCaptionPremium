@@ -692,8 +692,8 @@ internal fun AutoCaptionPanel(
                 GroqSettingsPanel(enabled) { keyReady = it }
             } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 val choices = if (speechLanguage == "fa")
-                    listOf("persian" to "فارسی تخصصی", "quality" to "Turbo عمومی", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
-                else listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Small سبک")
+                    listOf("persian" to "فارسی تخصصی", "quality" to "Turbo عمومی", "compact" to "Turbo کم‌حجم", "fast" to "Turbo سریع")
+                else listOf("quality" to "کیفیت", "compact" to "Turbo کم‌حجم", "fast" to "Turbo سریع")
                 val shownMode = if (speechLanguage == "ar" && mode == "persian") "quality" else mode
                 choices.forEach { (key, label) ->
                     OutlinedButton(onClick = { mode = key }, enabled = enabled) { Text(if (shownMode == key) "✓ $label" else label) }
@@ -702,7 +702,7 @@ internal fun AutoCaptionPanel(
             if (!online && speechLanguage == "fa" && mode == "persian") Text(
                 "مدل ویژهٔ فارسی؛ دریافت یک‌باره حدود ۵۴۸ مگابایت. برای مقایسه می‌توانی Turbo عمومی را انتخاب کنی.",
                 color = TextMuted, fontSize = 12.sp, lineHeight = 19.sp)
-            if (!online && mode == "fast") Text("Small حافظهٔ کمتری مصرف می‌کند؛ خطای فارسی آن ممکن است بیشتر باشد.", color = AccentSoft, fontSize = 12.sp)
+            if (!online && mode == "fast") Text("Turbo Compact با رمزگشایی سریع؛ برای کاهش محسوس زمان پردازش روی گوشی.", color = AccentSoft, fontSize = 12.sp)
             Button(
                 onClick = { onTranscribe(speechLanguage, if (online) onlineModel else mode) },
                 enabled = enabled && (!online || keyReady),
