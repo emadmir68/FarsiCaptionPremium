@@ -27,8 +27,12 @@ std::vector<float> read_pcm16_wav(const std::string & path) {
         } else if (id=="data") {
             if (!format_ok || size%2) throw std::runtime_error("Expected PCM16 mono 16 kHz WAV");
             std::vector<float> samples;
-            samples.reserve(std::min<uint32_t>(size/2,16000*60));
-            unsigned char buffer[8192];
+            // The PCM data chunk already tells us its exact sample count. Reserving only
+            // one minute caused multi-minute videos to repeatedly grow/copy this
+            // vector before ASR. Reserve the exact size once; recognition samples,
+            // timestamps and decoding parameters are unchanged.
+            samples.reserve(size/2);
+            unsigned char buffer[65536];
             uint32_t remaining=size;
             while (remaining) {
                 auto n=std::min<uint32_t>(remaining,sizeof(buffer));
