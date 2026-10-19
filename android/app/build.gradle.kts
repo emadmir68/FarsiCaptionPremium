@@ -17,8 +17,8 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         minSdk = 26
         targetSdk = 35
-        versionCode = 50
-        versionName = "3.5.2-longvideo"
+        versionCode = 51
+        versionName = "3.5.3-fast-turbo"
     }
 
     signingConfigs {
