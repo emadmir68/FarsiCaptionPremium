@@ -13,6 +13,11 @@ object PersianTextNormalizer {
         text = text.replace(Regex("(?<![\\p{L}\\p{N}\\u200C])(ن?می) +($verb)(?![\\p{L}\\p{N}\\u200C])")) {
             it.groupValues[1] + "‌" + it.groupValues[2]
         }
+        // Conservative Persian orthography: only join unambiguous plural/comparative suffixes
+        // after a Persian-script token. This changes typography, never vocabulary.
+        text = text.replace(
+            Regex("([\\u0600-\\u06FF][\\u0600-\\u06FF\\u200C]*) +(ها|های|هایی|تر|ترین)(?![\\p{L}\\p{N}\\u200C])")
+        ) { it.groupValues[1] + "‌" + it.groupValues[2] }
         return text.replace(Regex(" *‌+ *"), "‌").replace(Regex("\\s+([،؛:,.!?؟])"), "$1")
             .replace(Regex("([،؛!?؟])([^\\s»)])"), "$1 $2").trim()
     }
