@@ -18,6 +18,20 @@ class UserCorrectionStore(context: Context) {
 
     fun size(): Int = all().size
 
+    /** Conservative learning path: only replay a correction when the whole normalized caption matches. */
+    fun learnExact(originalRaw: String, editedRaw: String) {
+        val original = PersianTextNormalizer.normalize(originalRaw)
+        val edited = PersianTextNormalizer.normalize(editedRaw)
+        if (original.isBlank() || edited.isBlank() || original == edited) return
+        if (original.length > 140 || edited.length > 140) return
+        prefs.edit().putString("exact:$original", edited).apply()
+    }
+
+    fun applyExact(raw: String): String {
+        val normalized = PersianTextNormalizer.normalize(raw)
+        return prefs.getString("exact:$normalized", null)?.takeIf { it.isNotBlank() } ?: normalized
+    }
+
     fun learn(originalRaw: String, editedRaw: String) {
         val original = PersianTextNormalizer.normalize(originalRaw)
         val edited = PersianTextNormalizer.normalize(editedRaw)
