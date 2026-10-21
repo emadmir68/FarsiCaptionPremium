@@ -13,6 +13,11 @@ object PersianTextNormalizer {
         text = text.replace(Regex("(?<![\\p{L}\\p{N}\\u200C])(ن?می) +($verb)(?![\\p{L}\\p{N}\\u200C])")) {
             it.groupValues[1] + "‌" + it.groupValues[2]
         }
+        // Join only high-confidence Persian suffixes emitted as separate ASR tokens.
+        // Requiring a Persian-script stem avoids touching Latin text, URLs and numbers.
+        text = text.replace(Regex("([\\u0600-\\u06FF]+) +(ها|های|تر|ترین)(?![\\p{L}\\p{N}\\u200C])")) {
+            it.groupValues[1] + "‌" + it.groupValues[2]
+        }
         return text.replace(Regex(" *‌+ *"), "‌").replace(Regex("\\s+([،؛:,.!?؟])"), "$1")
             .replace(Regex("([،؛!?؟])([^\\s»)])"), "$1 $2").trim()
     }
