@@ -21,7 +21,7 @@ internal object CaptionPipeline {
             // Missing/invalid alignment retains the native interval; never invent word timings.
             val aligned = words.isNotEmpty() && words.all { it.start.isFinite() && it.end.isFinite() && it.start >= s.start && it.end <= s.end && it.end > it.start } &&
                 words.zipWithNext().all { (a, b) -> a.end <= b.start } &&
-                SpeechLanguagePolicy.clean(words.joinToString(" ") { it.text }, language) == s.text
+                canonicalAlignmentText(SpeechLanguagePolicy.clean(words.joinToString(" ") { it.text }, language)) == canonicalAlignmentText(s.text)
             if (aligned) wordGroups(words, maxWords.coerceIn(2, 7)).forEach { chunk ->
                 val text = SpeechLanguagePolicy.clean(chunk.joinToString(" ") { it.text }, language)
                 val a = maxOf(chunk.first().start, start, out.lastOrNull()?.end ?: 0.0)
@@ -31,6 +31,13 @@ internal object CaptionPipeline {
         }
         return out
     }
+    // Punctuation is often attached only to the segment text by Whisper. It must not
+    // discard otherwise valid native word timestamps.
+    private fun canonicalAlignmentText(text: String): String =
+        text.replace(Regex("""[\p{P}\p{S}]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
     private fun wordGroups(words: List<TimedWord>, limit: Int): List<List<TimedWord>> {
         val phrases = mutableListOf<MutableList<TimedWord>>()
         words.forEach { word ->
