@@ -34,8 +34,8 @@ internal object CaptionPipeline {
     // Punctuation is often attached only to the segment text by Whisper. It must not
     // discard otherwise valid native word timestamps.
     private fun canonicalAlignmentText(text: String): String =
-        text.replace(Regex("""[\\p{P}\\p{S}]+"""), " ")
-            .replace(Regex("""\\s+"""), " ")
+        text.replace(Regex("""[\p{P}\p{S}]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
     private fun wordGroups(words: List<TimedWord>, limit: Int): List<List<TimedWord>> {
