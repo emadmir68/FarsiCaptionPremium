@@ -13,6 +13,7 @@ class PersianTextNormalizerTest {
     @Test fun joinsPluralSuffixes() { assertEquals("کتاب‌ها خانه‌های", PersianTextNormalizer.normalize("کتاب ها خانه های")) }
     @Test fun joinsComparativeSuffixes() { assertEquals("بزرگ‌تر بهترین", PersianTextNormalizer.normalize("بزرگ تر بهترین")) }
     @Test fun suffixRulesDoNotTouchLatinUrlsOrNumbers() { assertEquals("Android ها https://example.com/a ها 13 ها", PersianTextNormalizer.normalize("Android ها https://example.com/a ها 13 ها")) }
+    @Test fun suffixRulesDoNotJoinPersianDigits() { assertEquals("۱۲ ها", PersianTextNormalizer.normalize("۱۲ ها")) }
     @Test fun suffixNormalizationIsIdempotent() { val x = PersianTextNormalizer.normalize("کتاب ها خانه های بزرگ تر"); assertEquals(x, PersianTextNormalizer.normalize(x)) }
     @Test fun normalizesExistingHalfSpace() { assertEquals("کتاب‌ها", PersianTextNormalizer.normalize("کتاب ‌ ها")) }
     @Test fun isIdempotent() { val x = PersianTextNormalizer.normalize("  مي روم , كتاب ‌ ها؟  "); assertEquals(x, PersianTextNormalizer.normalize(x)) }
