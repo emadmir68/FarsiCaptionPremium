@@ -13,6 +13,19 @@ class CaptionPipelineTest {
     @Test fun invalidIntervalsAreRejected() { assertTrue(build(AsrSegment("الف",Double.NaN,1.0),AsrSegment("ب",3.0,2.0),AsrSegment("ج",11.0,12.0)).isEmpty()) }
     @Test fun noWordsMeansNoInventedAlignment() { val r=build(AsrSegment("یک دو سه چهار",1.0,8.0)); assertEquals(1,r.size); assertTrue(r[0].words.isEmpty()); assertEquals(8.0,r[0].end,0.0) }
     @Test fun nativeWordGapIsRetained() { val r=build(AsrSegment("یک دو سه چهار",0.0,9.0,listOf(TimedWord("یک",1.0,2.0),TimedWord("دو",2.0,3.0),TimedWord("سه",6.0,7.0),TimedWord("چهار",7.0,8.0)))); assertEquals(2,r.size); assertEquals(3.0,r[0].end,0.0); assertEquals(6.0,r[1].start,0.0) }
+    @Test fun punctuationDifferenceKeepsNativeWordTiming() {
+        val r = build(AsrSegment("سلام، دنیا!", 0.0, 4.0, listOf(TimedWord("سلام", 1.0, 2.0), TimedWord("دنیا", 2.0, 3.0))))
+        assertEquals(1, r.size)
+        assertEquals(1.0, r[0].start, 0.0)
+        assertEquals(3.0, r[0].end, 0.0)
+        assertEquals(2, r[0].words.size)
+    }
+    @Test fun lexicalMismatchStillFallsBackToSegmentTiming() {
+        val r = build(AsrSegment("سلام دنیا", 0.0, 4.0, listOf(TimedWord("سلام", 1.0, 2.0), TimedWord("دوست", 2.0, 3.0))))
+        assertTrue(r[0].words.isEmpty())
+        assertEquals(0.0, r[0].start, 0.0)
+        assertEquals(4.0, r[0].end, 0.0)
+    }
     @Test fun invalidWordTimesFallBackToNativeSegment() { val r=build(AsrSegment("یک دو",1.0,4.0,listOf(TimedWord("یک",0.0,2.0),TimedWord("دو",2.0,3.0)))); assertTrue(r[0].words.isEmpty()); assertEquals(1.0,r[0].start,0.0) }
     @Test fun silenceBetweenNativeSegmentsStaysBlank() { val r=build(AsrSegment("اول",1.0,2.0),AsrSegment("دوم",7.0,8.0)); assertEquals(2.0,r[0].end,0.0); assertEquals(7.0,r[1].start,0.0) }
 }
