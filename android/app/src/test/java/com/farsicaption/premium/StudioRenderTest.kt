@@ -34,7 +34,7 @@ class StudioRenderTest {
     @Test fun captionBeyondSixtyRemainsEditable() { paparazzi.snapshot { StudioTheme {
         Surface(color=Ink, modifier=Modifier.fillMaxSize()) {
             Column(Modifier.padding(vertical=24.dp)) {
-                TextEditor(List(75){ CaptionItem("هر صدا، یک داستان تازه دارد",it.toDouble(),it+1.0) },74,{},{_,_->})
+                TextEditor(List(75){ CaptionItem("هر صدا، یک داستان تازه دارد",it.toDouble(),it+1.0) },74,{},{_,_->},{_,_->})
             }
         }
     } } }
