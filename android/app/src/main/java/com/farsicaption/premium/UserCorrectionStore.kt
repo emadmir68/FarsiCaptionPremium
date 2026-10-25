@@ -2,6 +2,13 @@ package com.farsicaption.premium
 
 import android.content.Context
 
+internal fun isMeaningfulCorrection(originalRaw: String, editedRaw: String): Boolean {
+    val original = PersianTextNormalizer.normalize(originalRaw)
+    val edited = PersianTextNormalizer.normalize(editedRaw)
+    return original.isNotBlank() && edited.isNotBlank() && original != edited &&
+        original.length <= 140 && edited.length <= 140
+}
+
 class UserCorrectionStore(context: Context) {
 
     private val prefs =
@@ -22,8 +29,7 @@ class UserCorrectionStore(context: Context) {
         val original = PersianTextNormalizer.normalize(originalRaw)
         val edited = PersianTextNormalizer.normalize(editedRaw)
 
-        if (original.isBlank() || edited.isBlank() || original == edited) return
-        if (original.length > 140 || edited.length > 140) return
+        if (!isMeaningfulCorrection(original, edited)) return
 
         val editor = prefs.edit()
 
