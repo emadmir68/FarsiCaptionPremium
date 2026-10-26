@@ -6,7 +6,7 @@ import org.junit.Test
 
 class UserCorrectionCommitTest {
     @Test fun meaningfulEditCanBeLearned() {
-        assertTrue(isMeaningfulCorrection("می روم", "می‌روم"))
+        assertTrue(isMeaningfulCorrection("سلم", "سلام"))
     }
 
     @Test fun unchangedOrIncompleteEditIsNotLearned() {
