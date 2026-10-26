@@ -17,8 +17,8 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         minSdk = 26
         targetSdk = 35
-        versionCode = 54
-        versionName = "3.5.6-word-timing"
+        versionCode = 55
+        versionName = "3.5.7-learned-corrections"
     }
 
     signingConfigs {

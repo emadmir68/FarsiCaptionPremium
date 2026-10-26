@@ -133,6 +133,7 @@ private fun PremiumCaptionApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val engine = remember { LocalCaptionEngine(context) }
+    val correctionStore = remember { UserCorrectionStore(context) }
 
     // A fresh app launch always starts at Home. Persisted projects are never forced open.
     var sourceString by rememberSaveable { mutableStateOf<String?>(null) }
@@ -276,6 +277,9 @@ private fun PremiumCaptionApp() {
                             }
                             saveProjectState(context, sourceUri, captions, activeJobId, appliedJobId)
                         },
+                        onCommitCorrection = { original, edited ->
+                            correctionStore.learn(original, edited)
+                        },
                         onTranscribe = { language, mode ->
                             val uri = sourceUri
                             if (uri != null && !isTranscribing) {
@@ -379,6 +383,7 @@ private fun EditorScreen(
     onBackground: (String) -> Unit,
     onSelectCaption: (Int) -> Unit,
     onEditCaption: (Int, String) -> Unit,
+    onCommitCorrection: (String, String) -> Unit,
     onTranscribe: (String, String) -> Unit,
     onCancel: () -> Unit,
     onExport: () -> Unit,
@@ -523,7 +528,7 @@ private fun EditorScreen(
                 EditorTabs(tab) { tab = it }
 
                 when (tab) {
-                    "text" -> TextEditor(captions, selectedIndex, onSelectCaption, onEditCaption)
+                    "text" -> TextEditor(captions, selectedIndex, onSelectCaption, onEditCaption, onCommitCorrection)
                     "style" -> StyleEditor(
                         preset = preset,
                         fontSize = activeFont,
@@ -794,8 +799,10 @@ private fun TabButton(
 internal fun TextEditor(
     captions: List<CaptionItem>, selectedIndex: Int,
     onSelect: (Int) -> Unit, onEdit: (Int, String) -> Unit,
+    onCommitCorrection: (String, String) -> Unit,
 ) {
     val caption = captions.getOrNull(selectedIndex) ?: return
+    var originalText by remember(selectedIndex, caption.start, caption.end) { mutableStateOf(caption.text) }
     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("ویرایش کپشن", color = TextPrimary, fontWeight = FontWeight.Bold)
@@ -813,6 +820,18 @@ internal fun TextEditor(
             ),
             shape = RoundedCornerShape(20.dp), minLines = 2, maxLines = 5,
         )
+        Button(
+            onClick = {
+                onCommitCorrection(originalText, caption.text)
+                originalText = caption.text
+            },
+            enabled = isMeaningfulCorrection(originalText, caption.text),
+            colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("ثبت اصلاح برای یادگیری", fontWeight = FontWeight.Bold)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = { onSelect(selectedIndex - 1) }, enabled = selectedIndex > 0, modifier = Modifier.weight(1f)) { Text("کپشن قبلی") }
             OutlinedButton(onClick = { onSelect(selectedIndex + 1) }, enabled = selectedIndex < captions.lastIndex, modifier = Modifier.weight(1f)) { Text("کپشن بعدی") }
